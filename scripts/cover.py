@@ -54,28 +54,107 @@ def _esc(s):
             .replace(">", "&gt;").replace('"', "&quot;"))
 
 
-def _wrap(text, size, max_w, max_lines=2, ls=0.0):
-    """按估算字宽折行。中文按 1em，英文/数字按 0.56em，ls 是 letter-spacing（em）。
-    不用浏览器自己折是因为要精确控制「最多两行 + 省略号」——估算必须把字距算进去，
-    否则 CSS 里字距一加，浏览器会自己再折一次，文字就被切在框外。"""
+_NO_START = set("，。、！？；：）」』》…％%,.;:!?)]}")
+
+
+def _wrap(text, size, max_w, max_lines=2, ls=0.0, safety=0.93):
+    """按估算字宽折行。中文按 1em，英文/数字按 0.58em，ls 是 letter-spacing（em）。
+    不用浏览器自己折是因为要精确控制「最多 N 行 + 省略号」——估算必须把字距算进去，
+    否则 CSS 里字距一加，浏览器会自己再折一次，文字就被切在框外。
+
+    两条排版规则：
+    1. 优先断在句读点后面（阶段一按标点切句再贪心合并，全放得下就用它）；
+    2. 逐字断行时行首不许出现句读点——遇到就把标点拉进上一行。
+    safety 吸收估算误差：正常断行只用到 max_w 的 93%，标点回拉最多 100%。"""
     text = re.sub(r"\s+", " ", str(text or "")).strip()
     if not text:
         return []
-    lines, cur, w = [], "", 0.0
-    for ch in text:
-        cw = (size if ord(ch) > 0x2000 else size * 0.56) * (1 + ls)
-        if w + cw > max_w and cur:
+    soft, hard = max_w * safety, max_w
+
+    def cw(ch):
+        return (size if ord(ch) > 0x2000 else size * 0.58) * (1 + ls)
+
+    def width(s):
+        return sum(cw(c) for c in s)
+
+    # 阶段一：按句读断句（标点留在上一行尾），贪心合并
+    segs = [s for s in re.split(r"(?<=[，。、！？；：…])", text) if s]
+    if len(segs) > 1 and all(width(s) <= soft for s in segs):
+        lines, cur = [], ""
+        for seg in segs:
+            if cur and width(cur + seg) > soft:
+                lines.append(cur)
+                cur = ""
+            cur += seg
+        if cur:
             lines.append(cur)
-            cur, w = "", 0.0
+        if len(lines) <= max_lines:
+            return lines
+
+    # 阶段二：逐字贪心 + 三条规则
+    #   a) 行首不出现句读点（标点拉进上一行）
+    #   b) 连续英文/数字不拆到两行（如 23、URL）
+    #   c) 断点后紧跟句读点时回退一个字（「逼真，」别从中间切）
+    # 多行时按「总宽/行数」定目标行宽，各行均匀，别第一行撑满后面剩尾巴
+    total = width(text)
+    n_est = int(total // soft) + 1
+    target = soft
+    if 1 < n_est <= max_lines:
+        target = min(soft, max(total / n_est, soft * 0.8))
+    lines, cur, w = [], "", 0.0
+    for i, ch in enumerate(text):
+        c = cw(ch)
+        if cur and w + c > target:
+            if ch in _NO_START and w + c <= hard:
+                cur += ch
+                w += c
+                lines.append(cur)
+                cur, w = "", 0.0
+                if len(lines) == max_lines:
+                    break
+                continue
+            m = re.search(r"[0-9A-Za-z]+$", cur)
+            if m and re.match(r"[0-9A-Za-z]", ch) and w - width(m.group()) >= soft * 0.3:
+                moved = m.group()
+                cur = cur[:m.start()]
+            else:
+                nxt = text[i + 1] if i + 1 < len(text) else ""
+                back = cur[-1] if cur else ""
+                moved = ""
+                if (nxt in _NO_START and ch not in _NO_START and back
+                        and w - cw(back) >= soft * 0.3):
+                    moved = back
+                    cur = cur[:-1]
+            lines.append(cur)
+            cur, w = moved, width(moved)
             if len(lines) == max_lines:
                 break
+        if not cur and ch == " ":
+            continue  # 新行不要以空格开头
         cur += ch
-        w += cw
+        w += c
     if cur and len(lines) < max_lines:
         lines.append(cur)
     if len(lines) == max_lines and len("".join(lines)) < len(text):
-        lines[-1] = lines[-1].rstrip()[:-1] + "…"
+        tail = lines[-1].rstrip()
+        lines[-1] = (tail[:-1] + "…") if len(tail) > 1 else (tail + "…")
     return lines
+
+
+def _fit_title(text, max_w, max_lines, start, ls=0.01, floor=26):
+    """标题字号自适应：从 start 往下试，取能「完整放下、不出省略号」的最大字号。
+    比写死一个字号再打省略号好看得多——封面标题宁可小一号，不要出现…
+    （完整性按去空格比较，因为折行时行首空格会被丢掉）"""
+    clean = re.sub(r"\s+", " ", str(text or "")).strip()
+    s = start
+    while s > floor:
+        lines = _wrap(text, s, max_w, max_lines, ls)
+        joined = "".join(lines)
+        if lines and "…" not in joined and \
+                len(joined.replace(" ", "")) >= len(clean.replace(" ", "")):
+            return s, lines
+        s -= 2
+    return floor, _wrap(text, floor, max_w, max_lines, ls)
 
 
 def _fill(tpl, **kw):
@@ -116,27 +195,30 @@ COVER_TPL = """<!DOCTYPE html>
     position:absolute; border-radius:50%;
     border:1px solid rgba(111,207,151,0.22);
   }
-  .top { position:relative; display:flex; align-items:center; gap:__GAP__px; }
+  .top { position:relative; z-index:2; display:flex; align-items:center; gap:__GAP__px; }
   .badge {
     font-size:__S_BADGE__px; letter-spacing:0.28em; color:__ACCENT__;
     font-weight:700; text-transform:uppercase;
   }
   .sep { width:__SEP__px; height:1px; background:rgba(157,176,167,0.45); }
   .no { font-size:__S_BADGE__px; letter-spacing:0.16em; color:__DIM__; }
-  .mid { position:relative; padding-right:__MIDR__px; }
+  .mid { position:relative; z-index:1; padding-right:__MIDR__px; }
   .kicker {
     font-size:__S_KICK__px; letter-spacing:0.16em; color:__ACCENT__;
     font-weight:700; margin-bottom:__GAP2__px;
+    border-left:__KBAR__px solid rgba(111,207,151,0.9);
+    padding-left:__KPAD__px; line-height:1.5;
   }
   .title {
-    font-size:__S_TITLE__px; line-height:1.22; color:__INK__;
+    font-size:__S_TITLE__px; line-height:1.24; color:__INK__;
     font-weight:900; letter-spacing:0.01em;
+    text-shadow:0 2px 28px rgba(0,0,0,0.35);
   }
   .sub {
     margin-top:__GAP3__px; font-size:__S_SUB__px; line-height:1.6;
     color:__DIM__; letter-spacing:0.02em;
   }
-  .bot { position:relative; display:flex; align-items:center; justify-content:space-between; }
+  .bot { position:relative; z-index:2; display:flex; align-items:center; justify-content:space-between; }
   .repo {
     font-family:__MONO__; font-size:__S_REPO__px; color:rgba(243,240,231,0.62);
     letter-spacing:0.04em;
@@ -144,15 +226,17 @@ COVER_TPL = """<!DOCTYPE html>
   .meta { display:flex; align-items:center; gap:__GAP__px; }
   .star { font-size:__S_REPO__px; color:__ACCENT__; font-weight:700; }
   .by { font-size:__S_REPO__px; color:rgba(243,240,231,0.40); letter-spacing:0.08em; }
+  /* 大号期数：右上角出血、描边空心，只当纹理不当主角 */
   .num {
-    position:absolute; right:__NUMR__px; bottom:__NUMB__px;
-    font-size:__S_NUM__px; font-weight:900; color:rgba(111,207,151,0.13);
-    line-height:1; letter-spacing:-0.04em;
+    position:absolute; right:__NUMR__px; top:__NUMT__px; z-index:0;
+    font-size:__S_NUM__px; font-weight:900; line-height:0.8;
+    letter-spacing:-0.04em;
+    color:transparent; -webkit-text-stroke:__NUMSTROKE__px rgba(111,207,151,0.30);
   }
 </style></head>
 <body><div class="cover">
   <div class="grid"></div>
-  <div class="ring" style="width:__R1__px;height:__R1__px;right:__R1R__px;top:__R1T__px;"></div>
+  <div class="ring" style="width:__R1__px;height:__R1__px;left:__R1L__px;bottom:__R1B__px;"></div>
   <div class="top">
     <span class="badge">__COLUMN__</span>
     <span class="sep"></span>
@@ -190,11 +274,13 @@ def cover_html(item, prof, size=(900, 383), big=False):
     pad = int(48 * k) if ratio > 0.7 else int(52 * k)
     mid_r = int(24 * k) if ratio > 0.7 else int(60 * k)
 
-    s_title = int((46 if len(title_txt) <= 10 else 38) * k)
-    if ratio > 0.7:
-        s_title = int(s_title * 1.12)
     s_kick = int((15 if ratio > 0.7 else 14) * k)
-    title_lines = _wrap(title_txt, s_title, w - pad * 2 - mid_r, 2 if ratio < 0.7 else 3)
+    # 标题字号自适应：宽图最多 2 行、方图最多 3 行，放不下就自动缩一号
+    t_start = (46 if len(title_txt) <= 10 else 40) * (1.1 if ratio > 0.7 else 1.0)
+    t_start = int(t_start)
+    t_max_lines = 2 if ratio < 0.7 else 3
+    s_title, title_lines = _fit_title(
+        title_txt, w - pad * 2 - mid_r, t_max_lines, t_start)
     title_html = "<br>".join(_esc(x) for x in title_lines) or _esc(title_txt)
 
     kw = w - pad * 2 - mid_r
@@ -216,10 +302,12 @@ def cover_html(item, prof, size=(900, 383), big=False):
         BG1=C_BG_1, BG2=C_BG_2, INK=C_INK, DIM=C_DIM, ACCENT=C_ACCENT,
         PAD=pad, GRID=int(44 * k), GAP=int(14 * k), SEP=int(28 * k),
         GAP2=int(12 * k), GAP3=int(14 * k), MIDR=mid_r,
+        KBAR=int(3 * k), KPAD=int(12 * k),
         S_BADGE=int(13 * k), S_KICK=s_kick, S_TITLE=s_title,
-        S_SUB=int(15 * k), S_REPO=int(13 * k), S_NUM=int(180 * k),
-        NUMR=int(40 * k), NUMB=int(16 * k),
-        R1=int(360 * k), R1R=int(-120 * k), R1T=int(-150 * k),
+        S_SUB=int(15 * k), S_REPO=int(13 * k),
+        S_NUM=int((200 if ratio < 0.7 else 190) * k),
+        NUMR=int(18 * k), NUMT=int(-40 * k), NUMSTROKE=int(2 * k) + 1,
+        R1=int(360 * k), R1L=int(-140 * k), R1B=int(-180 * k),
         COLUMN=_esc(prof.get("column", "")),
         NO=_esc(f"第 {int(item.get('_issue_no') or 1):02d} 期"),
         KICKER=kicker_html, TITLE=title_html, SUB=sub_html,
