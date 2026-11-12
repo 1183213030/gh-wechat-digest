@@ -70,7 +70,7 @@ def figure(full_name, caption="", compact=False):
     cap = f'<br><span style="color:{C_SUB};font-size:12px;">{esc(caption)}</span>' if caption else ""
     pad = "12px 12px" if compact else "22px 14px"
     mb = "12px" if compact else "20px"
-    tip = "［ 图 ］" if compact else "［ 图片占位 · 粘贴时删掉本框，把下面这张图拖进来 ］"
+    tip = "［ 这里放一张图 ］" if compact else "［ 这里放图：保存下面网址的图片，删掉本框拖进来 ］"
     return (f'<section style="margin:14px 0 {mb} 0;padding:{pad};'
             f'border:1px dashed #cfc9bd;border-radius:6px;background:#fbfaf7;'
             f'text-align:center;">'
@@ -375,7 +375,7 @@ def article_header(issue, item, idx, total):
     left = col
     if no:
         left += f" · 第 {int(no):02d} 期"
-    right = f"单篇 {marks[idx - 1] if 0 < idx <= len(marks) else idx}/{total}"
+    right = f"{marks[idx - 1] if 0 < idx <= len(marks) else idx} / {total}"
     return ('<section style="margin:0 0 18px 0;padding-bottom:10px;'
             f'border-bottom:1px solid {C_LINE};">'
             f'<p style="margin:0;font-size:13px;letter-spacing:1px;color:{C_ACCENT};'
@@ -398,10 +398,6 @@ def article_body(issue, item, idx, total):
     if item.get("lead"):
         out.append(quote(item["lead"]))
     out.append(figure(item["full_name"], item.get("figure_caption", "")))
-
-    if item.get("meta"):
-        out.append('<section style="margin:0 0 18px 0;">'
-                   + "".join(kv_row(k, v) for k, v in item["meta"]) + '</section>')
 
     for seg in (item.get("what") or []):
         out.append(para(esc(seg)))

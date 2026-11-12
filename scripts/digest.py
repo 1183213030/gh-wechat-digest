@@ -402,7 +402,6 @@ def _draft(args, main, shorts, pool, dropped):
             "lead": _first_sentence(p.get("desc")),
             "summary": [p.get("desc") or ""],
             "teaser": "",
-            "meta": _meta_rows(p),
             "figure_caption": f"{p['full_name']} · {p['form']}",
             "_auto": True,
         }
