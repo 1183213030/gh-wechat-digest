@@ -1,0 +1,4 @@
+{
+ "_说明": "把 gh_token 填进下面这个字段就能提速（申请：github.com/settings/tokens → Generate new token (classic) → 勾 public_repo）。不填也能跑，走匿名，每小时 60 次。",
+ "gh_token": ""
+}
