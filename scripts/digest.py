@@ -26,6 +26,7 @@ import deploy  # noqa: E402
 import render  # noqa: E402
 import score as scorer  # noqa: E402
 import sources  # noqa: E402
+import theme  # noqa: E402
 
 D = os.path.join(HERE, "data")
 P_POOL = os.path.join(D, "pool.json")
@@ -645,14 +646,86 @@ def cmd_apply(args):
 
 # ---------------------------------------------------------------- 出稿
 
+def _apply_theme(issue_or_prof):
+    """把主色应用到正文和封面渲染器。优先级：命令行 --theme > profile.json > 稿件里记的。
+
+    以 profile.json 为准，是因为换主题的期望是「立刻生效」，稿子里那份 profile
+    还是 run 那天的快照，读它会让人以为切了没反应。
+    """
+    if isinstance(issue_or_prof, dict) and "profile" in issue_or_prof:
+        spec = (issue_or_prof.get("_theme")
+                or theme.current_spec(load(P_PROFILE))
+                or theme.current_spec(issue_or_prof.get("profile")))
+    else:
+        spec = theme.current_spec(issue_or_prof)
+    p = render.apply_theme(spec)
+    cover.apply_theme(spec)
+    return p
+
+
+def cmd_theme(args):
+    """看 / 换 / 预览主色。
+
+    换主色只改 profile.json 一个字段，之后再 render 就全套生效；
+    已经出好的稿子要看到新色，得重跑 render（或至少 cover）。
+    """
+    prof = load(P_PROFILE)
+
+    if args.preview:
+        import cover as _cover
+        out_html = os.path.join(D, "theme_preview.html")
+        cur = theme.current_spec(prof)
+        with open(out_html, "w", encoding="utf-8") as f:
+            f.write(theme.preview_html())
+        png = os.path.join(D, "theme_preview.png")
+        b = _cover.find_browser()
+        if not b:
+            log("[!] 没找到 Chrome/Edge，只出了 HTML：" + out_html)
+            return 0
+        ok, err = _cover.shot(b, out_html, png, (1180, 900))
+        if not ok:
+            log(f"[!] 截图失败：{err}\n    HTML 还在：{out_html}")
+            return 1
+        log(f"[OK] 对照图 -> {png}")
+        return 0
+
+    # 不带参数：看现状 + 列预设
+    cur = _apply_theme(prof)
+    log(f"当前主色：{cur['label']}  {cur['accent']}\n")
+    log("可选：")
+    for key, label, accent, note in theme.choices():
+        mark = " ←" if key == cur["name"] else ""
+        log(f"  {key:9s} {label}  {accent}{mark}")
+        log(f"            {note}")
+    log("\n换：python scripts/digest.py theme <名字 或 #色值>")
+    log("看效果：python scripts/digest.py theme --preview")
+    if not args.name:
+        return 0
+
+    # 带参数：写入 profile.json
+    p = theme.resolve(args.name)
+    if p["name"] == theme.DEFAULT and not theme.is_hex(args.name) \
+            and args.name.lower() not in theme.PRESETS:
+        log(f"[!] 没认出「{args.name}」，可填预设名或 #RRGGBB")
+        return 1
+    prof["theme"] = p["name"]
+    save(P_PROFILE, prof)
+    log(f"[OK] 主色改为 {p['label']} {p['accent']}，已写进 data/profile.json")
+    log("     重出稿件：python scripts/digest.py render")
+    return 0
+
+
 def cmd_render(args):
     issue = load(P_ISSUE)
     if not issue:
         log("[!] 没有稿件，先跑 run")
         return 1
     issue["date"] = issue.get("date") or today()
+    if getattr(args, "theme", None):
+        issue["_theme"] = args.theme
     txt = json.dumps(issue, ensure_ascii=False)
     issue["word_count"] = len(re.findall(r"[\u4e00-\u9fa5]", txt))
+    _apply_theme(issue)
     made, p_fig, p_link = render.write_files(issue, REPORTS)
 
     st = load(P_STATE)
@@ -712,6 +785,9 @@ def cmd_cover(args):
     if not issue:
         log("[!] 没有稿件，先跑 run")
         return 1
+    if getattr(args, "theme", None):
+        issue["_theme"] = args.theme
+    _apply_theme(issue)
     covers, cerr = cover.build(issue, COVERS)
     if cerr:
         log(f"[!] {cerr}")
@@ -788,8 +864,14 @@ def main():
     sub.add_parser("apply")
     p = sub.add_parser("render")
     p.add_argument("--no-cover", action="store_true", help="跳过封面生成")
+    p.add_argument("--theme", default="", help="临时换主色（不改 profile.json）")
     p = sub.add_parser("cover")
     p.add_argument("--out", default="")
+    p.add_argument("--theme", default="", help="临时换主色")
+    p = sub.add_parser("theme")
+    p.add_argument("name", nargs="?", default="",
+                   help="预设名（brick/inkgreen/indigo/amber/plum/graphite）或 #RRGGBB")
+    p.add_argument("--preview", action="store_true", help="出一张配色对照图")
     p = sub.add_parser("log")
     p.add_argument("--url", default="")
     p.add_argument("--reads", type=int, default=0)
@@ -800,7 +882,7 @@ def main():
         ap.print_help()
         return 0
     fn = {"doctor": cmd_doctor, "run": cmd_run, "pick": cmd_pick, "todo": cmd_todo, "apply": cmd_apply,
-          "render": cmd_render, "cover": cmd_cover,
+          "render": cmd_render, "cover": cmd_cover, "theme": cmd_theme,
           "log": cmd_log, "history": cmd_history}[args.cmd]
     return fn(args) or 0
 

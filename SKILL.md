@@ -62,9 +62,14 @@ python scripts/digest.py pick --main owner/repo --shorts a/b,c/d
 python scripts/digest.py todo          # 列出这一期哪些段落还是规则文案
 python scripts/digest.py apply         # 读 data/write.json 覆盖进去
 python scripts/digest.py render         # 出 HTML / md / 配图清单
+python scripts/digest.py theme          # 看当前主色 + 全部预设
+python scripts/digest.py theme indigo   # 换主色（预设名或 #RRGGBB，写进 profile.json）
+python scripts/digest.py theme --preview  # 出一张六套主色的对照图 data/theme_preview.png
 python scripts/digest.py log --url 链接  # 记一条发布记录
 python scripts/digest.py history        # 看发过几期、发过哪些项目
 ```
+
+**主色可切换**（`scripts/theme.py`）：预设 `brick 砖红`（默认，已发文章同款）/ `inkgreen 墨绿` / `indigo 靛蓝` / `amber 琥珀` / `plum 梅紫` / `graphite 石墨`，也可以直接给 `#RRGGBB`。主色驱动的不只是强调色——引用块淡底、链接位框、坑块边线、封面深底和亮强调色都是按 accent 现算的派生色，换一个词全套跟着变。渲染前 `render.apply_theme()` / `cover.apply_theme()` 各应用一次；`render --theme xxx` 可以只试一稿不改配置。注意：`data/covers_src/` 里的专属定制封面颜色是手画的，不随主题变。
 
 `run` 的旋钮：
 

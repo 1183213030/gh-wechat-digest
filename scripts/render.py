@@ -13,16 +13,35 @@
 import html
 import os
 
+import theme
+
 # 版式口径对齐公众号已发文章（2026-10《AI冲击就业带来的副业焦虑》）：
 # 正文 15px #333 / 行高 1.75 / 字距 0.5px / 两端对齐 / 段距 18px；
-# 标题「01｜」17.5px 加粗近黑；引用块米白底 + 砖红左边条；金句砖红加粗；
-# 图片圆角 8px 带阴影；结尾「— 全文完 · 感谢阅读 —」灰字居中。主色砖红 #ba3b28。
+# 标题「01｜」17.5px 加粗近黑；引用块淡底 + 强调色左边条；金句强调色加粗；
+# 图片圆角 8px 带阴影；结尾「— 全文完 · 感谢阅读 —」灰字居中。
+#
+# 主色不写死：C_ACCENT / C_SOFT / C_QUOTE_BG / C_HAIRLINE 由 apply_theme() 按
+# profile.json 的 theme 字段现算。模块级变量供下面的 f-string 在调用时读取，
+# 所以渲染前必须调一次 apply_theme()，否则拿到的是默认砖红。
 C_TEXT = "#333333"
 C_SUB = "#888888"
-C_ACCENT = "#ba3b28"
 C_LINE = "#e5e5e5"
 C_CODE_BG = "#f6f6f6"
+C_ACCENT = "#ba3b28"
+C_SOFT = "#fbf5f4"
 C_QUOTE_BG = "#faf9f8"
+C_HAIRLINE = "#d9d2c4"
+
+
+def apply_theme(spec=None):
+    """按预设名 / #hex 换整套主色。返回解析后的色板，方便调用方打印。"""
+    global C_ACCENT, C_SOFT, C_QUOTE_BG, C_HAIRLINE
+    p = theme.resolve(spec)
+    C_ACCENT = p["accent"]
+    C_SOFT = p["soft"]
+    C_QUOTE_BG = p["quote_bg"]
+    C_HAIRLINE = p["hairline"]
+    return p
 FONT = ('-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,"PingFang SC",'
         '"Hiragino Sans GB","Microsoft YaHei",sans-serif')
 MONO = 'Consolas,Menlo,"Courier New",monospace'
@@ -179,7 +198,7 @@ def pit_list(pits):
         else:
             head, body = "", p
         out.append('<section style="margin:0 0 12px 0;padding:12px 14px;'
-                   'background:#faf9f8;border-left:3px solid #d9d2c4;border-radius:0 4px 4px 0;">')
+                   f'background:{C_QUOTE_BG};border-left:3px solid {C_HAIRLINE};border-radius:0 4px 4px 0;">')
         if head:
             out.append(f'<p style="margin:0 0 4px 0;font-size:15px;font-weight:bold;'
                        f'color:#1a1a1a;line-height:1.75;letter-spacing:0.5px;">{i}. {esc(head)}</p>')
@@ -207,7 +226,7 @@ def link_slot(label="", note="发布后在这里插入超链接"):
     所以这里输出一个显眼的占位框，粘贴完在编辑器里选中它替换成链接。
     """
     return (f'<section style="margin:6px 0 20px 0;padding:14px 16px;'
-            f'border:1px dashed {C_ACCENT};border-radius:6px;background:#fbf5f4;">'
+            f'border:1px dashed {C_ACCENT};border-radius:6px;background:{C_SOFT};">'
             f'<p style="margin:0 0 4px 0;font-size:15px;font-weight:bold;color:{C_ACCENT};'
             f'line-height:1.75;">→ {esc(label or "点这里看全文")}</p>'
             f'<p style="margin:0;font-size:12px;color:{C_SUB};line-height:1.6;'
@@ -425,8 +444,8 @@ def article_body(issue, item, idx, total):
 
     if item.get("check"):
         out.append(st("装之前，先确认三件事"))
-        out.append('<section style="margin:0 0 18px 0;padding:14px 16px;background:#faf9f8;'
-                   'border-radius:6px;">'
+        out.append(f'<section style="margin:0 0 18px 0;padding:14px 16px;'
+                   f'background:{C_QUOTE_BG};border-radius:6px;">'
                    + "".join(kv_row(k, v) for k, v in item["check"]) + '</section>')
 
     if item.get("ai_why") or item.get("ai_prompt"):
@@ -502,10 +521,10 @@ def page(title, body_html, meta_html="", tips=TIPS_ISSUE, btn="复制正文（�
     <p style="margin:0 0 12px 0;color:#9a9a9a;font-size:12px;line-height:1.7;">
       {meta_html}
     </p>
-    <button onclick="copyBody()" style="background:#ba3b28;color:#ffffff;border:0;
+    <button onclick="copyBody()" style="background:{C_ACCENT};color:#ffffff;border:0;
       border-radius:6px;padding:10px 20px;font-size:15px;font-weight:bold;cursor:pointer;">
       {btn}</button>
-    <span id="ok" style="color:#ba3b28;font-size:13px;margin-left:10px;opacity:0;">已复制</span>
+    <span id="ok" style="color:{C_ACCENT};font-size:13px;margin-left:10px;opacity:0;">已复制</span>
   </section>
 
   <section style="background:#ffffff;border-radius:10px;padding:26px 22px;

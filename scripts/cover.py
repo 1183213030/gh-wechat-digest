@@ -20,11 +20,26 @@ import sys
 import tempfile
 import uuid
 
-C_BG_1 = "#16302A"      # 深墨绿，与正文 accent #1F6F4A 同族
-C_BG_2 = "#0B1613"
-C_INK = "#F3F0E7"       # 米白
-C_DIM = "#9DB0A7"
-C_ACCENT = "#6FCF97"
+import theme
+
+# 封面默认色板（墨绿）。正文主色一换，apply_theme() 会把下面四个变量重算成
+# 同色系的深底 + 亮强调色 —— 封面和正文同源，才不会一期一个色。
+C_BG_1 = "#16302A"      # 深底渐变起点
+C_BG_2 = "#0B1613"      # 渐变终点（更黑）
+C_INK = "#F3F0E7"       # 米白正文
+C_DIM = "#9DB0A7"       # 次要信息
+C_ACCENT = "#6FCF97"    # 深底上的强调色
+
+
+def apply_theme(spec=None):
+    """把封面深底和强调色对齐到主题色。深底是主色压暗到底，强调色是提亮版。"""
+    global C_BG_1, C_BG_2, C_DIM, C_ACCENT
+    p = theme.resolve(spec)
+    C_BG_1 = p["cover_bg1"]
+    C_BG_2 = p["cover_bg2"]
+    C_DIM = p["cover_dim"]
+    C_ACCENT = p["cover_accent"]
+    return p
 
 FONT_STACK = ('"Microsoft YaHei","PingFang SC","Hiragino Sans GB",'
               '"Source Han Sans SC","Noto Sans CJK SC",sans-serif')
@@ -175,8 +190,8 @@ COVER_TPL = """<!DOCTYPE html>
   .cover {
     position:relative; width:__W__px; height:__H__px; overflow:hidden;
     background:
-      radial-gradient(circle at 88% 8%, rgba(111,207,151,0.20) 0%, rgba(111,207,151,0) 46%),
-      radial-gradient(circle at 6% 96%, rgba(111,207,151,0.10) 0%, rgba(111,207,151,0) 40%),
+      radial-gradient(circle at 88% 8%, rgba(__GLOW__,0.20) 0%, rgba(__GLOW__,0) 46%),
+      radial-gradient(circle at 6% 96%, rgba(__GLOW__,0.10) 0%, rgba(__GLOW__,0) 40%),
       linear-gradient(135deg, __BG1__ 0%, __BG2__ 100%);
     display:flex; flex-direction:column; justify-content:space-between;
     padding:__PAD__px;
@@ -193,20 +208,20 @@ COVER_TPL = """<!DOCTYPE html>
   }
   .ring {
     position:absolute; border-radius:50%;
-    border:1px solid rgba(111,207,151,0.22);
+    border:1px solid rgba(__GLOW__,0.22);
   }
   .top { position:relative; z-index:2; display:flex; align-items:center; gap:__GAP__px; }
   .badge {
     font-size:__S_BADGE__px; letter-spacing:0.28em; color:__ACCENT__;
     font-weight:700; text-transform:uppercase;
   }
-  .sep { width:__SEP__px; height:1px; background:rgba(157,176,167,0.45); }
+  .sep { width:__SEP__px; height:1px; background:rgba(__DIMRGB__,0.45); }
   .no { font-size:__S_BADGE__px; letter-spacing:0.16em; color:__DIM__; }
   .mid { position:relative; z-index:1; padding-right:__MIDR__px; }
   .kicker {
     font-size:__S_KICK__px; letter-spacing:0.16em; color:__ACCENT__;
     font-weight:700; margin-bottom:__GAP2__px;
-    border-left:__KBAR__px solid rgba(111,207,151,0.9);
+    border-left:__KBAR__px solid rgba(__GLOW__,0.9);
     padding-left:__KPAD__px; line-height:1.5;
   }
   .title {
@@ -231,7 +246,7 @@ COVER_TPL = """<!DOCTYPE html>
     position:absolute; right:__NUMR__px; top:__NUMT__px; z-index:0;
     font-size:__S_NUM__px; font-weight:900; line-height:0.8;
     letter-spacing:-0.04em;
-    color:transparent; -webkit-text-stroke:__NUMSTROKE__px rgba(111,207,151,0.30);
+    color:transparent; -webkit-text-stroke:__NUMSTROKE__px rgba(__GLOW__,0.30);
   }
 </style></head>
 <body><div class="cover">
@@ -296,10 +311,14 @@ def cover_html(item, prof, size=(900, 383), big=False):
     star = item.get("stars")
     star_html = (f'<span class="star">★ {star:,}</span>' if isinstance(star, int) else "")
 
+    def _rgb_str(h):
+        return ",".join(str(v) for v in theme._rgb(h))
+
     return _fill(
         COVER_TPL,
         W=w, H=h, FONT=FONT_STACK, MONO=MONO_STACK,
         BG1=C_BG_1, BG2=C_BG_2, INK=C_INK, DIM=C_DIM, ACCENT=C_ACCENT,
+        GLOW=_rgb_str(C_ACCENT), DIMRGB=_rgb_str(C_DIM),
         PAD=pad, GRID=int(44 * k), GAP=int(14 * k), SEP=int(28 * k),
         GAP2=int(12 * k), GAP3=int(14 * k), MIDR=mid_r,
         KBAR=int(3 * k), KPAD=int(12 * k),
