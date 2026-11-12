@@ -186,6 +186,8 @@ python scripts/digest.py history        # 看发过几期、发过哪些项目
 
 实现是 Chrome headless 渲染 HTML 模板 → PNG（`scripts/cover.py`），**不装 PIL**。三个坑都踩过并写在代码注释里：折行估算必须算 letter-spacing；临时文件走 ASCII 路径（Chrome 对中文 `file:///` 会静默失败）；封面文案取 `kicker` 而不是 one_liner（后者多半是英文原句，放中文封面上出戏）。
 
+**专属封面（推荐给重点项目）**：通用模板保证统一，但统一到没有特色——好封面是「0.5 秒能看懂的动作钩子」，得按项目单独画。在 `data/covers_src/` 放 `<slug>_2.35x1.html` 和 `<slug>_1x1.html`（内联 SVG，尺寸 900x383 / 500x500），`cover` 检测到就渲染它，没有才退回通用模板。设计原则：深底高对比、一个动作（不是一堆信息）、主文案 5–7 个汉字、缩到 200px 宽还能读；不放 GitHub/代码截图、长句和表格。参考 `a2_rea-video_*.html`（视频被斜切拉开成三段）。
+
 ### 标题
 
 `run` 会从模板里挑一个，但基本要你改。好标题的公式是**「具体动作 + 具体收益 + 一点代价」**：

@@ -1,0 +1,89 @@
+<!DOCTYPE html>
+<html><head><meta charset="utf-8"><style>
+  * { margin:0; padding:0; }
+  html,body { width:900px; height:383px; overflow:hidden; background:#0D1117; }
+  body { font-family:"Microsoft YaHei","PingFang SC","Hiragino Sans GB",sans-serif;
+         -webkit-font-smoothing:antialiased; }
+  .mono { font-family:Consolas,"Courier New",monospace; }
+</style></head>
+<body>
+<svg width="900" height="383" viewBox="0 0 900 383">
+  <defs>
+    <linearGradient id="bar" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0" stop-color="#F0883E"/>
+      <stop offset="0.5" stop-color="#A371F7"/>
+      <stop offset="1" stop-color="#58A6FF"/>
+    </linearGradient>
+    <clipPath id="win"><rect x="70" y="78" width="250" height="168" rx="14"/></clipPath>
+  </defs>
+
+  <!-- 底 -->
+  <rect width="900" height="383" fill="#0D1117"/>
+  <circle cx="780" cy="30" r="330" fill="#161B22" opacity="0.55"/>
+
+  <!-- 栏目行 -->
+  <text x="70" y="56" font-size="14" letter-spacing="3" fill="#8B949E" font-weight="700">GITHUB 开源观察 · 第 01 期</text>
+
+  <!-- 左：视频播放窗 -->
+  <g>
+    <rect x="70" y="78" width="250" height="168" rx="14" fill="#161B22" stroke="#30363D" stroke-width="1.5"/>
+    <g clip-path="url(#win)">
+      <rect x="70" y="78" width="250" height="168" fill="#1C2128"/>
+      <circle cx="272" cy="120" r="24" fill="#F0883E" opacity="0.9"/>
+      <path d="M70 220 L152 156 L214 214 L262 176 L320 226 L320 246 L70 246 Z" fill="#A371F7" opacity="0.75"/>
+      <path d="M70 246 L162 200 L244 246 Z" fill="#58A6FF" opacity="0.55"/>
+    </g>
+    <circle cx="195" cy="162" r="26" fill="#FFFFFF" opacity="0.95"/>
+    <path d="M188 149 L212 162 L188 175 Z" fill="#0D1117"/>
+    <rect x="92" y="226" width="180" height="4" rx="2" fill="#30363D"/>
+    <rect x="92" y="226" width="84" height="4" rx="2" fill="#FFFFFF" opacity="0.85"/>
+    <circle cx="176" cy="228" r="5" fill="#FFFFFF"/>
+  </g>
+
+  <!-- 中：斜切（影子 + 白刃 + 拉链齿） -->
+  <line x1="343" y1="72" x2="150" y2="263" stroke="#000000" stroke-width="15"
+        stroke-linecap="round" opacity="0.35" transform="translate(3,4)"/>
+  <line x1="343" y1="72" x2="150" y2="263" stroke="#FFFFFF" stroke-width="13" stroke-linecap="round"/>
+  <g stroke="#FFFFFF" stroke-width="4" stroke-linecap="round" opacity="0.9">
+    <line x1="296.3" y1="116.9" x2="313.9" y2="125.3"/>
+    <line x1="263.1" y1="152.7" x2="280.7" y2="161.1"/>
+    <line x1="229.9" y1="188.5" x2="247.5" y2="196.9"/>
+    <line x1="196.7" y1="224.3" x2="214.3" y2="232.7"/>
+  </g>
+
+  <!-- 右：三段被拉出的胶片块 -->
+  <g transform="translate(430,88) rotate(-10)">
+    <rect width="300" height="56" rx="12" fill="#F0883E"/>
+    <rect x="248" y="10" width="4" height="36" rx="2" fill="#0D1117" opacity="0.25"/>
+    <rect x="264" y="10" width="4" height="36" rx="2" fill="#0D1117" opacity="0.25"/>
+    <rect x="280" y="10" width="4" height="36" rx="2" fill="#0D1117" opacity="0.25"/>
+    <rect x="20" y="16" width="30" height="23" rx="5" fill="#FFFFFF" opacity="0.95"/>
+    <circle cx="33" cy="27" r="6" fill="#F0883E"/>
+    <path d="M52 22 l11 -6 v23 l-11 -6 z" fill="#FFFFFF" opacity="0.95"/>
+    <text x="78" y="38" font-size="26" font-weight="900" fill="#FFFFFF">实拍</text>
+  </g>
+  <g transform="translate(474,158) rotate(-10)">
+    <rect width="300" height="56" rx="12" fill="#A371F7"/>
+    <rect x="248" y="10" width="4" height="36" rx="2" fill="#0D1117" opacity="0.25"/>
+    <rect x="264" y="10" width="4" height="36" rx="2" fill="#0D1117" opacity="0.25"/>
+    <rect x="280" y="10" width="4" height="36" rx="2" fill="#0D1117" opacity="0.25"/>
+    <path d="M35 12 L39 25 L52 29 L39 33 L35 46 L31 33 L18 29 L31 25 Z" fill="#FFFFFF" opacity="0.95"/>
+    <text x="66" y="38" font-size="26" font-weight="900" fill="#FFFFFF">AI 生成</text>
+  </g>
+  <g transform="translate(518,228) rotate(-10)">
+    <rect width="300" height="56" rx="12" fill="#58A6FF"/>
+    <rect x="248" y="10" width="4" height="36" rx="2" fill="#0D1117" opacity="0.25"/>
+    <rect x="264" y="10" width="4" height="36" rx="2" fill="#0D1117" opacity="0.25"/>
+    <rect x="280" y="10" width="4" height="36" rx="2" fill="#0D1117" opacity="0.25"/>
+    <text x="20" y="38" font-size="24" font-weight="700" fill="#FFFFFF" class="mono">&lt;/&gt;</text>
+    <text x="66" y="38" font-size="26" font-weight="900" fill="#FFFFFF">代码</text>
+  </g>
+
+  <!-- 左下：主文案 -->
+  <text x="70" y="322" font-size="56" font-weight="900" fill="#FFFFFF">视频拆开看</text>
+  <rect x="72" y="336" width="128" height="6" rx="3" fill="url(#bar)"/>
+  <text x="70" y="368" font-size="21" font-weight="700">
+    <tspan fill="#F0883E">实拍</tspan><tspan fill="#8B949E"> / </tspan><tspan fill="#A371F7">AI</tspan><tspan fill="#8B949E"> / </tspan><tspan fill="#58A6FF">代码</tspan><tspan fill="#8B949E">　逐镜识别</tspan>
+  </text>
+</svg>
+</body></html>

@@ -358,6 +358,21 @@ def make(html_str, png_path, size, browser):
 
 SIZES = {"big": (900, 383), "square": (500, 500)}
 
+# 专属封面：data/covers_src/<slug>_2.35x1.html / <slug>_1x1.html。
+# 通用模板保证每期风格统一，但统一到没有特色；好的封面是「0.5 秒能看懂的动作钩子」，
+# 得按项目单独画。有专属文件就渲染它，没有才退回通用模板。
+CUSTOM_DIR = os.path.join(os.path.dirname(os.path.dirname(
+    os.path.abspath(__file__))), "data", "covers_src")
+
+
+def _custom_html(slug, kind):
+    name = f"{slug}_{'2.35x1' if kind == 'big' else '1x1'}.html"
+    p = os.path.join(CUSTOM_DIR, name)
+    if os.path.exists(p):
+        with open(p, encoding="utf-8") as f:
+            return f.read()
+    return None
+
 
 def build(issue, out_dir, want=("big", "square"), browser=None):
     """为一期生成全部封面。返回 [(tag, 文件路径, 说明)]。"""
@@ -380,7 +395,10 @@ def build(issue, out_dir, want=("big", "square"), browser=None):
         for kind in want:
             size = SIZES[kind]
             p = os.path.join(out_dir, f"a{idx}_{slug}_封面_{'2.35x1' if kind == 'big' else '1x1'}.png")
-            ok, err = make(cover_html(it, prof, size), p, size, browser)
+            html_str = _custom_html(slug, kind)
+            if html_str is None:
+                html_str = cover_html(it, prof, size)
+            ok, err = make(html_str, p, size, browser)
             if ok:
                 made.append((f"a{idx}", p, f"{it.get('zh_name')} · {size[0]}x{size[1]}"))
             else:
@@ -401,7 +419,10 @@ def build(issue, out_dir, want=("big", "square"), browser=None):
     for kind in want:
         size = SIZES[kind]
         p = os.path.join(out_dir, f"issue_封面_{'2.35x1' if kind == 'big' else '1x1'}.png")
-        ok, err = make(cover_html(index_item, prof, size), p, size, browser)
+        html_str = _custom_html("issue", kind)
+        if html_str is None:
+            html_str = cover_html(index_item, prof, size)
+        ok, err = make(html_str, p, size, browser)
         if ok:
             made.insert(0, ("导读", p, f"索引页 · {size[0]}x{size[1]}"))
         else:
