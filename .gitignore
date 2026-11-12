@@ -12,3 +12,7 @@ data/reports/
 # Python
 __pycache__/
 *.pyc
+
+# 截图预览
+*.png
+!docs/**
