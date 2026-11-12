@@ -227,15 +227,15 @@ def _pick(args, pool, seen):
 # ---------------------------------------------------------------- 规则版文案（只是骨架）
 
 TITLE_TPL = [
-    "这周在 GitHub 上挖到 {n} 个项目，第 1 个我自己先装上了",
-    "翻了两晚 GitHub，只留下这 {n} 个",
-    "{n} 个能立刻用上的 GitHub 项目，最后一个有点野",
-    "别再刷 GitHub trending 了，这 {n} 个才是能装的",
+    "GitHub 上这 {n} 个项目，解决的都是又小又烦的事",
+    "星星多不等于好用：这 {n} 个开源项目值得试",
+    "这 {n} 个开源项目，装起来都不费劲",
+    "GitHub 开源观察：这 {n} 个项目，普通人也能用上",
 ]
 INTRO_TPL = [
-    "先说清楚筛选标准：能装、能看懂、不折腾。看完觉得没用可以直接关掉。",
-    "每个都给了三步上手，装不上算我输。第 {i} 个是我个人最想推荐的。",
+    "先说清楚：这是看完仓库和文档之后的判断，不是实测结论 —— 哪个你装了，欢迎回来补一句真实体验。",
 ]
+
 
 PAIN_TPL = {
     "命令行": "烦的从来不是难，是每次都要重新拼一遍参数。这个东西把那条命令固化成一句话。",
@@ -317,10 +317,29 @@ def _build_menu(main, shorts):
     return menu
 
 
+def _next_issue_no():
+    """期号以发布记录为准：发过几期就接几，不从 01 重来。
+    今天已经出过稿但还没发，就沿用今天那个号，重跑不跳号。"""
+    pub = load(P_PUB, {"items": []})
+    nos = [int(x.get("issue_no") or 0) for x in (pub.get("items") or [])]
+    st = load(P_STATE)
+    if st.get("last_date") == today() and st.get("issue_no"):
+        return int(st["issue_no"])
+    return (max(nos) if nos else 0) + 1
+
+
+def _pick_rotating(pool, issue_no, fallback=""):
+    """结尾/互动按号轮换，别每期都同一句。"""
+    pool = [x for x in (pool or []) if x]
+    if not pool:
+        return fallback
+    return pool[(issue_no - 1) % len(pool)]
+
+
 def _draft(args, main, shorts, pool, dropped):
     n = 1 + len(shorts)
-    st = load(P_STATE)
-    issue_no = st.get("issue_no", 0) + (0 if st.get("last_date") == today() else 1)
+    prof0 = load(P_PROFILE)
+    issue_no = _next_issue_no()
 
     def pack(p, is_main):
         d = {
@@ -348,20 +367,19 @@ def _draft(args, main, shorts, pool, dropped):
         return d
 
     tpl = TITLE_TPL[issue_no % len(TITLE_TPL)].format(n=n)
-    prof = load(P_PROFILE)
+    prof = prof0
     issue = {
         "date": today(),
         "issue_no": issue_no,
+        "first_issue": issue_no <= 1,
         "profile": prof,
         "menu": _build_menu(pack(main, True), [pack(s, False) for s in shorts]),
         "title": tpl,
-        "intro": [INTRO_TPL[0], INTRO_TPL[1].format(i=1)],
+        "intro": [INTRO_TPL[0].format(i=1)],
         "main": pack(main, True),
         "shorts": [pack(s, False) for s in shorts],
-        "ending": [
-            "就这些。觉得哪个有用，收藏之前先装一个试试 —— 收藏夹里的东西从来没被打开过。",
-        ],
-        "cta": "想让我盯哪个方向（自用工具 / 设计素材 / AI 工作流），留言说一句，下期优先扫。",
+        "ending": [_pick_rotating(prof0.get("ending_pool"), issue_no)],
+        "cta": _pick_rotating(prof0.get("cta_pool"), issue_no),
         "stats": {"pool": len(pool), "mode": "token" if load(P_POOL).get("mode") == "token" else "匿名抓取"},
         "dropped": dropped[:12],
     }
@@ -493,8 +511,13 @@ def cmd_apply(args):
         issue["ending"] = w["ending"]
     if w.get("cta"):
         issue["cta"] = w["cta"]
+    # 目录跟着项目走：文案改完重新生成，避免还挂着仓库英文名
     if w.get("menu"):
         issue["menu"] = w["menu"]
+    else:
+        issue["menu"] = _build_menu(issue["main"], issue.get("shorts") or [])
+    if w.get("guide"):
+        issue["guide"] = w["guide"]
     if w.get("header_lines"):
         issue["profile"] = {**(issue.get("profile") or {}), "intro_lines": w["header_lines"]}
     save(P_ISSUE, issue)

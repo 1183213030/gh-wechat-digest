@@ -119,25 +119,55 @@ def divider():
 # ---------------------------------------------------------------- 整篇
 
 def header(issue):
-    """固定开头：自我介绍 + 期号 + 本期看点。内容来自 data/profile.json，
-    每期自动生成，write.json 里可用 header_lines / menu 覆盖。"""
+    """固定开头，顺序照读者认知走：
+
+        开场白（首期完整 / 后续精简） → 栏目 + 期数 → 栏目介绍
+        → 本期导读 → 目录 → 筛选原则
+
+    内容全部来自 data/profile.json；write.json 里的 header_lines 可临时覆盖开场白。
+    """
     prof = issue.get("profile") or {}
     out = []
 
-    # 期号行
-    if issue.get("issue_no"):
-        acc = esc(prof.get("account", ""))
+    # 1. 开场白
+    if issue.get("header_lines"):
+        lines = issue["header_lines"]
+    elif issue.get("first_issue"):
+        lines = prof.get("intro_first") or prof.get("intro_lines") or []
+    else:
+        lines = prof.get("intro_short") or prof.get("intro_lines") or []
+    for ln in lines:
+        out.append(para(esc(ln)))
+    if lines:
+        out.append(divider())
+
+    # 2. 栏目 + 期数（居中报头）
+    col = esc(prof.get("column", ""))
+    no = issue.get("issue_no")
+    if col or no:
+        no_txt = f"第 {int(no):02d} 期" if no else ""
+        sep = f'<span style="color:{C_LINE};">&nbsp;·&nbsp;</span>' if (col and no_txt) else ""
+        out.append(
+            '<section style="margin:6px 0 18px 0;text-align:center;">'
+            f'<p style="margin:0;font-size:15px;letter-spacing:2px;color:{C_ACCENT};'
+            f'font-weight:700;line-height:1.8;">{col}{sep}'
+            f'<span style="color:{C_SUB};font-weight:400;">{no_txt}</span></p></section>')
+
+    # 3. 栏目介绍
+    for ln in prof.get("column_intro") or []:
+        out.append(para(esc(ln)))
+
+    # 4. 本期导读
+    n_short = len(issue.get("shorts") or [])
+    if issue.get("guide"):
+        out.append(para(esc(issue["guide"])))
+    else:
+        total = 1 + n_short
         out.append(para(
-            f'<span style="color:{C_ACCENT};font-weight:700;">第 {issue["issue_no"]} 期</span>'
-            + (f' · {acc}' if acc else '')
-            + f'<span style="color:{C_SUB};"> · GitHub 项目周刊</span>',
-            size="14px", mb="14px"))
+            f'这一期挑了 <span style="font-weight:700;">{total}</span> 个值得关注的开源项目：'
+            f'1 个重点深挖，{n_short} 个短评。'))
 
-    # 固定自我介绍
-    for line in prof.get("intro_lines") or []:
-        out.append(para(esc(line)))
-
-    # 本期看点
+    # 5. 目录
     menu = issue.get("menu") or []
     if menu:
         marks = "①②③④⑤⑥⑦⑧"
@@ -145,11 +175,18 @@ def header(issue):
                 f'color:{C_TEXT};letter-spacing:0.3px;">'
                 f'<span style="color:{C_ACCENT};font-weight:700;">{marks[i]}</span>&nbsp;'
                 f'{esc(m)}</p>' for i, m in enumerate(menu)]
-        out.append('<section style="margin:16px 0 4px 0;padding:14px 16px;'
+        out.append('<section style="margin:14px 0 6px 0;padding:14px 16px;'
                    f'background:#f6f7f4;border-radius:6px;">'
                    f'<p style="margin:0 0 8px 0;font-size:13px;color:{C_ACCENT};'
-                   f'font-weight:700;letter-spacing:1px;">本期看点</p>'
+                   f'font-weight:700;letter-spacing:1px;">本期看什么</p>'
                    + "".join(rows) + '</section>')
+
+    # 6. 筛选原则
+    crit = prof.get("criteria")
+    if crit:
+        out.append(para(
+            f'这次筛选只有三个原则：<span style="color:{C_ACCENT};font-weight:700;">'
+            f'{esc(crit)}</span>。', mt="10px"))
 
     out.append(divider())
     return "".join(out)
@@ -263,20 +300,36 @@ def markdown(issue):
     L = []
     L.append(f"# {issue.get('title','')}\n")
     prof = issue.get("profile") or {}
-    if issue.get("issue_no"):
-        acc = prof.get("account", "")
-        L.append(f"> 第 {issue['issue_no']} 期" + (f" · {acc}" if acc else "") + " · GitHub 项目周刊\n\n")
-    for line in prof.get("intro_lines") or []:
+    if issue.get("header_lines"):
+        lines = issue["header_lines"]
+    elif issue.get("first_issue"):
+        lines = prof.get("intro_first") or prof.get("intro_lines") or []
+    else:
+        lines = prof.get("intro_short") or prof.get("intro_lines") or []
+    for line in lines:
         L.append(f"{line}\n\n")
+    L.append("---\n\n")
+    col = prof.get("column", "")
+    no = issue.get("issue_no")
+    if col or no:
+        L.append(f"**{col}" + (f" · 第 {int(no):02d} 期" if no else "") + "**\n\n")
+    for line in prof.get("column_intro") or []:
+        L.append(f"{line}\n\n")
+    n_short = len(issue.get("shorts") or [])
+    L.append((issue.get("guide") or
+              f"这一期挑了 {1 + n_short} 个值得关注的开源项目：1 个重点深挖，{n_short} 个短评。") + "\n\n")
     menu = issue.get("menu") or []
     if menu:
-        L.append("**本期看点**\n")
+        L.append("**本期看什么**\n\n")
         marks = "①②③④⑤⑥⑦⑧"
         for i, m in enumerate(menu):
             L.append(f"{marks[i]} {m}\n\n")
-        L.append("---\n\n")
+    if prof.get("criteria"):
+        L.append(f"这次筛选只有三个原则：**{prof['criteria']}**。\n\n")
+    L.append("---\n\n")
     for line in issue.get("intro") or []:
         L.append(f"{line}\n")
+
     L.append(f"\n## 1. {main.get('zh_name') or main['full_name']}\n")
     if main.get("one_liner"):
         L.append(f"> {main['one_liner']}\n")
