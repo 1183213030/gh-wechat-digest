@@ -87,7 +87,17 @@ python scripts/digest.py history        # 看发过几期、发过哪些项目
            {"which": "short1", "fill": {"zh_name": "", "one_liner": "", "verdict": ""}}]}
 ```
 
-`which` 就是 `todo` 里打印的 `main` / `short1` / `short2`。
+`which` 就是 `todo` 里打印的 `main` / `short1` / `short2`。另外 `title` / `intro` / `ending` / `cta` / `menu` / `header_lines` 都可以在 write.json 里整段覆盖。
+
+### 每期固定的开头（自我介绍 + 期号 + 本期看点）
+
+正文最上面会自动渲染三样东西，不用每期重写：
+
+1. **期号行** —— 「第 N 期 · 你的公众号名 · GitHub 项目周刊」
+2. **自我介绍** —— 来自 `data/profile.json` 的 `intro_lines`（每行一段）
+3. **本期看点框** —— `run`/`pick` 自动从选中的项目生成（主打带一句说明，短评只报名字）
+
+换公众号、换定位，改 `data/profile.json` 保存即可，下次 render 生效。某一期想临时改自我介绍，就在 write.json 里加 `header_lines`；想改看点措辞，加 `menu`。
 
 ### 六个字段各写什么
 

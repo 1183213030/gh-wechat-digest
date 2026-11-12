@@ -118,10 +118,47 @@ def divider():
 
 # ---------------------------------------------------------------- 整篇
 
+def header(issue):
+    """固定开头：自我介绍 + 期号 + 本期看点。内容来自 data/profile.json，
+    每期自动生成，write.json 里可用 header_lines / menu 覆盖。"""
+    prof = issue.get("profile") or {}
+    out = []
+
+    # 期号行
+    if issue.get("issue_no"):
+        acc = esc(prof.get("account", ""))
+        out.append(para(
+            f'<span style="color:{C_ACCENT};font-weight:700;">第 {issue["issue_no"]} 期</span>'
+            + (f' · {acc}' if acc else '')
+            + f'<span style="color:{C_SUB};"> · GitHub 项目周刊</span>',
+            size="14px", mb="14px"))
+
+    # 固定自我介绍
+    for line in prof.get("intro_lines") or []:
+        out.append(para(esc(line)))
+
+    # 本期看点
+    menu = issue.get("menu") or []
+    if menu:
+        marks = "①②③④⑤⑥⑦⑧"
+        rows = [f'<p style="margin:0 0 6px 0;font-size:15px;line-height:1.75;'
+                f'color:{C_TEXT};letter-spacing:0.3px;">'
+                f'<span style="color:{C_ACCENT};font-weight:700;">{marks[i]}</span>&nbsp;'
+                f'{esc(m)}</p>' for i, m in enumerate(menu)]
+        out.append('<section style="margin:16px 0 4px 0;padding:14px 16px;'
+                   f'background:#f6f7f4;border-radius:6px;">'
+                   f'<p style="margin:0 0 8px 0;font-size:13px;color:{C_ACCENT};'
+                   f'font-weight:700;letter-spacing:1px;">本期看点</p>'
+                   + "".join(rows) + '</section>')
+
+    out.append(divider())
+    return "".join(out)
+
+
 def body(issue):
     main = issue["main"]
     shorts = issue.get("shorts") or []
-    out = []
+    out = [header(issue)]
 
     # 导语
     if issue.get("intro"):
@@ -225,6 +262,19 @@ def markdown(issue):
     main = issue["main"]
     L = []
     L.append(f"# {issue.get('title','')}\n")
+    prof = issue.get("profile") or {}
+    if issue.get("issue_no"):
+        acc = prof.get("account", "")
+        L.append(f"> 第 {issue['issue_no']} 期" + (f" · {acc}" if acc else "") + " · GitHub 项目周刊\n\n")
+    for line in prof.get("intro_lines") or []:
+        L.append(f"{line}\n\n")
+    menu = issue.get("menu") or []
+    if menu:
+        L.append("**本期看点**\n")
+        marks = "①②③④⑤⑥⑦⑧"
+        for i, m in enumerate(menu):
+            L.append(f"{marks[i]} {m}\n\n")
+        L.append("---\n\n")
     for line in issue.get("intro") or []:
         L.append(f"{line}\n")
     L.append(f"\n## 1. {main.get('zh_name') or main['full_name']}\n")

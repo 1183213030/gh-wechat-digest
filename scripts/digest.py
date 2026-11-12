@@ -303,6 +303,20 @@ def _why_now(p):
     return f"已经沉淀到 {p.get('stars', 0):,} star，坑被踩完了、文档也全，做二创最省事。"
 
 
+P_PROFILE = os.path.join(D, "profile.json")
+
+
+def _build_menu(main, shorts):
+    """本期看点：一行一个，主打带一句短说明。"""
+    def cut(t, n=28):
+        t = re.sub(r"\s+", " ", t or "").strip()
+        return t[:n] + ("…" if len(t) > n else "")
+    menu = [f"{main.get('zh_name') or main['full_name']} —— {cut(main.get('one_liner'))}"]
+    for s in shorts:
+        menu.append(f"{s.get('zh_name') or s['full_name']}")
+    return menu
+
+
 def _draft(args, main, shorts, pool, dropped):
     n = 1 + len(shorts)
     st = load(P_STATE)
@@ -334,9 +348,12 @@ def _draft(args, main, shorts, pool, dropped):
         return d
 
     tpl = TITLE_TPL[issue_no % len(TITLE_TPL)].format(n=n)
+    prof = load(P_PROFILE)
     issue = {
         "date": today(),
         "issue_no": issue_no,
+        "profile": prof,
+        "menu": _build_menu(pack(main, True), [pack(s, False) for s in shorts]),
         "title": tpl,
         "intro": [INTRO_TPL[0], INTRO_TPL[1].format(i=1)],
         "main": pack(main, True),
@@ -476,6 +493,10 @@ def cmd_apply(args):
         issue["ending"] = w["ending"]
     if w.get("cta"):
         issue["cta"] = w["cta"]
+    if w.get("menu"):
+        issue["menu"] = w["menu"]
+    if w.get("header_lines"):
+        issue["profile"] = {**(issue.get("profile") or {}), "intro_lines": w["header_lines"]}
     save(P_ISSUE, issue)
     left = sum(1 for v in idx.values() if v.get("_auto"))
     log(f"[OK] 写回 {n} 个字段")
