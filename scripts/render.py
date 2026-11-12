@@ -13,13 +13,18 @@
 import html
 import os
 
-C_TEXT = "#2f2f2f"
-C_SUB = "#8c8c8c"
-C_ACCENT = "#1F6F4A"
-C_LINE = "#e8e4dc"
-C_CODE_BG = "#f7f7f3"
-FONT = ('-apple-system,BlinkMacSystemFont,"PingFang SC","Hiragino Sans GB",'
-        '"Microsoft YaHei",sans-serif')
+# 版式口径对齐公众号已发文章（2026-10《AI冲击就业带来的副业焦虑》）：
+# 正文 15px #333 / 行高 1.75 / 字距 0.5px / 两端对齐 / 段距 18px；
+# 标题「01｜」17.5px 加粗近黑；引用块米白底 + 砖红左边条；金句砖红加粗；
+# 图片圆角 8px 带阴影；结尾「— 全文完 · 感谢阅读 —」灰字居中。主色砖红 #ba3b28。
+C_TEXT = "#333333"
+C_SUB = "#888888"
+C_ACCENT = "#ba3b28"
+C_LINE = "#e5e5e5"
+C_CODE_BG = "#f6f6f6"
+C_QUOTE_BG = "#faf9f8"
+FONT = ('-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,"PingFang SC",'
+        '"Hiragino Sans GB","Microsoft YaHei",sans-serif')
 MONO = 'Consolas,Menlo,"Courier New",monospace'
 
 
@@ -29,87 +34,84 @@ def esc(s):
 
 # ---------------------------------------------------------------- 小块
 
-def para(text, color=C_TEXT, size="16px", weight="400", mt="0", mb="16px", align="left", lh="1.8"):
+def para(text, color=C_TEXT, size="15px", weight="400", mt="0", mb="18px", align="justify", lh="1.75"):
     return (f'<p style="margin:{mt} 0 {mb} 0;font-size:{size};line-height:{lh};'
-            f'color:{color};font-weight:{weight};text-align:{align};letter-spacing:0.4px;">'
+            f'color:{color};font-weight:{weight};text-align:{align};letter-spacing:0.5px;">'
             f'{text}</p>')
 
 
 def quote(text):
-    """左侧竖线的引文块，用来放「一句话说清」。"""
-    return (f'<section style="border-left:3px solid {C_ACCENT};padding:2px 0 2px 12px;'
-            f'margin:0 0 18px 0;">'
-            f'<p style="margin:0;font-size:16px;line-height:1.75;color:{C_TEXT};'
-            f'letter-spacing:0.4px;">{esc(text)}</p></section>')
+    """导语引用块：米白底 + 砖红左边条（参考文章的定稿样式）。"""
+    return (f'<section style="margin:28px 0 24px 0;padding:16px 18px;'
+            f'background-color:{C_QUOTE_BG};border-left:3.5px solid {C_ACCENT};'
+            f'border-radius:0 6px 6px 0;box-sizing:border-box;">'
+            f'<p style="margin:0;font-size:14.5px;line-height:1.8;color:#555555;'
+            f'letter-spacing:0.5px;text-align:justify;">{esc(text)}</p></section>')
 
 
 def section_title(text, num=""):
-    badge = ""
-    if num:
-        badge = (f'<span style="display:inline-block;min-width:22px;height:22px;'
-                 f'line-height:22px;text-align:center;border-radius:4px;'
-                 f'background:{C_ACCENT};color:#ffffff;font-size:13px;'
-                 f'font-weight:700;margin-right:8px;">{esc(num)}</span>')
-    return (f'<section style="margin:34px 0 14px 0;">'
-            f'<p style="margin:0;font-size:19px;font-weight:700;color:#1a1a1a;'
-            f'line-height:1.6;letter-spacing:0.3px;">{badge}{esc(text)}</p></section>')
+    """「01｜标题」式编号标题。"""
+    prefix = f"{int(num):02d}｜" if num else ""
+    return (f'<section style="margin:44px 0 22px 0;">'
+            f'<p style="margin:0;font-size:17.5px;font-weight:bold;color:#1a1a1a;'
+            f'letter-spacing:0.5px;line-height:1.4;">{esc(prefix)}{esc(text)}</p></section>')
 
 
-def sub_title(text):
-    """深挖文章里的小节标题，比 section_title 轻一档。"""
-    return (f'<section style="margin:28px 0 10px 0;">'
-            f'<p style="margin:0;font-size:17px;font-weight:700;color:#1a1a1a;'
-            f'line-height:1.6;letter-spacing:0.3px;">{esc(text)}</p>'
-            f'<span style="display:inline-block;width:28px;height:2px;'
-            f'background:{C_ACCENT};margin-top:6px;"></span></section>')
+def sub_title(text, num=""):
+    """单篇内的小节标题，同一套「01｜」编号，略小一档。"""
+    prefix = f"{int(num):02d}｜" if num else ""
+    return (f'<section style="margin:36px 0 18px 0;">'
+            f'<p style="margin:0;font-size:16.5px;font-weight:bold;color:#1a1a1a;'
+            f'letter-spacing:0.5px;line-height:1.4;">{esc(prefix)}{esc(text)}</p></section>')
 
 
 def figure(full_name, caption="", compact=False):
-    """图占位框。微信正文不收外链图，所以这里只给占位 + 可直接拖的地址。"""
+    """图占位框。微信正文不收外链图，所以这里只给占位 + 可直接拖的地址。
+    图注样式照参考文章：13px 灰色居中。"""
     url = f"https://opengraph.githubassets.com/1/{full_name}"
-    cap = f'<br><span style="color:{C_SUB};font-size:12px;">{esc(caption)}</span>' if caption else ""
+    cap = f'<br><span style="color:{C_SUB};font-size:13px;">{esc(caption)}</span>' if caption else ""
     pad = "12px 12px" if compact else "22px 14px"
     mb = "12px" if compact else "20px"
     tip = "［ 这里放一张图 ］" if compact else "［ 这里放图：保存下面网址的图片，删掉本框拖进来 ］"
-    return (f'<section style="margin:14px 0 {mb} 0;padding:{pad};'
-            f'border:1px dashed #cfc9bd;border-radius:6px;background:#fbfaf7;'
+    return (f'<section style="margin:24px 0 {mb} 0;padding:{pad};'
+            f'border:1px dashed #cfcfcf;border-radius:8px;background:#fbfbfa;'
             f'text-align:center;">'
-            f'<p style="margin:0 0 4px 0;font-size:13px;color:#8c8c8c;line-height:1.6;">'
+            f'<p style="margin:0 0 4px 0;font-size:13px;color:#888888;line-height:1.5;'
+            f'letter-spacing:0.5px;">'
             f'{tip}{cap}</p>'
-            f'<p style="margin:0;font-size:11px;color:#b0a99c;line-height:1.6;'
+            f'<p style="margin:10px 0 0 0;font-size:11px;color:#b5b5b5;line-height:1.6;'
             f'word-break:break-all;">{esc(url)}</p></section>')
 
 
 def kv_row(k, v):
     return (f'<p style="margin:0 0 6px 0;font-size:15px;line-height:1.75;color:{C_TEXT};'
-            f'letter-spacing:0.3px;"><span style="color:{C_SUB};">{esc(k)}</span>'
+            f'letter-spacing:0.5px;"><span style="color:{C_SUB};">{esc(k)}</span>'
             f'&nbsp;&nbsp;{esc(v)}</p>')
 
 
 def steps_block(steps):
     if not steps:
         return ""
-    out = ['<section style="margin:0 0 16px 0;padding:14px 16px;background:#f6f7f4;'
+    out = ['<section style="margin:0 0 18px 0;padding:14px 16px;background:#f6f6f6;'
            'border-radius:6px;">',
            f'<p style="margin:0 0 8px 0;font-size:13px;color:{C_ACCENT};'
-           f'font-weight:700;letter-spacing:1px;">三步用起来</p>']
+           f'font-weight:bold;letter-spacing:1px;">三步用起来</p>']
     for i, s in enumerate(steps, 1):
         out.append(f'<p style="margin:0 0 6px 0;font-size:15px;line-height:1.75;'
-                   f'color:{C_TEXT};letter-spacing:0.3px;">'
-                   f'<span style="color:{C_ACCENT};font-weight:700;">{i}.</span>&nbsp;'
+                   f'color:{C_TEXT};letter-spacing:0.5px;">'
+                   f'<span style="color:{C_ACCENT};font-weight:bold;">{i}.</span>&nbsp;'
                    f'{esc(s)}</p>')
     out.append("</section>")
     return "".join(out)
 
 
 def verdict_block(text):
+    """说句实话：参考文章的「金句段」处理——整段砖红加粗，不加框。"""
     if not text:
         return ""
-    return (f'<section style="margin:0 0 18px 0;padding:12px 14px;'
-            f'background:#fdf6ec;border-radius:6px;">'
-            f'<p style="margin:0;font-size:15px;line-height:1.75;color:#7a4b16;'
-            f'letter-spacing:0.3px;"><span style="font-weight:700;">说句实话 · </span>'
-            f'{esc(text)}</p></section>')
+    return (f'<p style="margin:32px 0 18px 0;font-size:15px;font-weight:bold;'
+            f'line-height:1.75;color:{C_ACCENT};letter-spacing:0.5px;'
+            f'text-align:justify;">{esc(text)}</p>')
 
 
 def link_line(url, stars="", lang=""):
@@ -117,14 +119,21 @@ def link_line(url, stars="", lang=""):
     meta_html = (f'<span style="color:{C_SUB};font-size:13px;">（{esc(meta)}）</span>'
                  if meta else "")
     return (f'<p style="margin:0 0 8px 0;font-size:14px;line-height:1.75;'
-            f'color:{C_ACCENT};word-break:break-all;letter-spacing:0.2px;">'
+            f'color:{C_ACCENT};word-break:break-all;letter-spacing:0.5px;">'
             f'{esc(url)}{meta_html}</p>')
 
 
 def divider():
     return (f'<section style="margin:30px 0;text-align:center;">'
-            f'<span style="display:inline-block;width:36px;height:1px;'
+            '<span style="display:inline-block;width:36px;height:1px;'
             f'background:{C_LINE};"></span></section>')
+
+
+def ending_mark():
+    """结尾落款，照参考文章：— 全文完 · 感谢阅读 —"""
+    return ('<section style="margin:48px auto 28px auto;text-align:center;">'
+            '<p style="margin:0;font-size:13px;color:#999999;line-height:1.6;'
+            'letter-spacing:0.5px;">— 全文完 · 感谢阅读 —</p></section>')
 
 
 def code_block(lines, label=""):
@@ -136,10 +145,10 @@ def code_block(lines, label=""):
     if not lines:
         return ""
     out = ['<section style="margin:0 0 18px 0;padding:14px 14px;'
-           f'background:{C_CODE_BG};border:1px solid #eae6dd;border-radius:6px;">']
+           f'background:{C_CODE_BG};border:1px solid #ececec;border-radius:6px;">']
     if label:
         out.append(f'<p style="margin:0 0 8px 0;font-size:12px;color:{C_ACCENT};'
-                   f'letter-spacing:1px;font-weight:700;">{esc(label)}</p>')
+                   f'letter-spacing:1px;font-weight:bold;">{esc(label)}</p>')
     for ln in lines:
         body = esc(ln) if str(ln).strip() else "&nbsp;"
         out.append(f'<p style="margin:0 0 3px 0;font-size:14px;line-height:1.7;'
@@ -153,14 +162,14 @@ def bullet_list(items, marker="·"):
         return ""
     out = []
     for it in items:
-        out.append(f'<p style="margin:0 0 8px 0;font-size:15px;line-height:1.8;'
-                   f'color:{C_TEXT};letter-spacing:0.3px;">'
+        out.append(f'<p style="margin:0 0 8px 0;font-size:15px;line-height:1.75;'
+                   f'color:{C_TEXT};letter-spacing:0.5px;">'
                    f'<span style="color:{C_ACCENT};">{esc(marker)}</span>&nbsp;{esc(it)}</p>')
     return "".join(out)
 
 
 def pit_list(pits):
-    """坑：一条一个「小标题 + 说明」，别写成大段。"""
+    """坑：一条一个「小标题 + 说明」，米白底灰边条。"""
     if not pits:
         return ""
     out = []
@@ -170,26 +179,24 @@ def pit_list(pits):
         else:
             head, body = "", p
         out.append('<section style="margin:0 0 12px 0;padding:12px 14px;'
-                   'background:#faf9f6;border-left:3px solid #d9d2c4;border-radius:0 4px 4px 0;">')
+                   'background:#faf9f8;border-left:3px solid #d9d2c4;border-radius:0 4px 4px 0;">')
         if head:
-            out.append(f'<p style="margin:0 0 4px 0;font-size:15px;font-weight:700;'
-                       f'color:#1a1a1a;line-height:1.7;">{i}. {esc(head)}</p>')
-        out.append(f'<p style="margin:0;font-size:15px;line-height:1.8;color:#5a5a5a;'
-                   f'letter-spacing:0.3px;">{esc(body)}</p></section>')
+            out.append(f'<p style="margin:0 0 4px 0;font-size:15px;font-weight:bold;'
+                       f'color:#1a1a1a;line-height:1.75;letter-spacing:0.5px;">{i}. {esc(head)}</p>')
+        out.append(f'<p style="margin:0;font-size:15px;line-height:1.75;color:#555555;'
+                   f'letter-spacing:0.5px;">{esc(body)}</p></section>')
     return "".join(out)
 
 
 def hint_block(title, lines, tone="green"):
-    """提示块：适合谁 / 不适合谁 / 一期怎么读。"""
+    """提示块：适合谁 / 不适合谁 / 一期怎么读。米白底，标题砖红。"""
     if not lines:
         return ""
-    bg = "#f2f7f3" if tone == "green" else "#fbf7f2"
-    fg = C_ACCENT if tone == "green" else "#8a6a2f"
-    body = "".join(f'<p style="margin:0 0 6px 0;font-size:15px;line-height:1.8;'
-                   f'color:{C_TEXT};letter-spacing:0.3px;">{esc(x)}</p>' for x in lines)
-    return (f'<section style="margin:0 0 16px 0;padding:14px 16px;background:{bg};'
+    body = "".join(f'<p style="margin:0 0 6px 0;font-size:15px;line-height:1.75;'
+                   f'color:{C_TEXT};letter-spacing:0.5px;">{esc(x)}</p>' for x in lines)
+    return (f'<section style="margin:0 0 18px 0;padding:14px 16px;background:{C_QUOTE_BG};'
             f'border-radius:6px;">'
-            f'<p style="margin:0 0 8px 0;font-size:13px;font-weight:700;color:{fg};'
+            f'<p style="margin:0 0 8px 0;font-size:13px;font-weight:bold;color:{C_ACCENT};'
             f'letter-spacing:1px;">{esc(title)}</p>{body}</section>')
 
 
@@ -200,10 +207,11 @@ def link_slot(label="", note="发布后在这里插入超链接"):
     所以这里输出一个显眼的占位框，粘贴完在编辑器里选中它替换成链接。
     """
     return (f'<section style="margin:6px 0 20px 0;padding:14px 16px;'
-            f'border:1px dashed {C_ACCENT};border-radius:6px;background:#f4f8f5;">'
-            f'<p style="margin:0 0 4px 0;font-size:15px;font-weight:700;color:{C_ACCENT};'
-            f'line-height:1.7;">→ {esc(label or "点这里看全文")}</p>'
-            f'<p style="margin:0;font-size:12px;color:{C_SUB};line-height:1.6;">'
+            f'border:1px dashed {C_ACCENT};border-radius:6px;background:#fbf5f4;">'
+            f'<p style="margin:0 0 4px 0;font-size:15px;font-weight:bold;color:{C_ACCENT};'
+            f'line-height:1.75;">→ {esc(label or "点这里看全文")}</p>'
+            f'<p style="margin:0;font-size:12px;color:{C_SUB};line-height:1.6;'
+            f'letter-spacing:0.5px;">'
             f'［{esc(note)}］</p></section>')
 
 
@@ -211,11 +219,11 @@ def index_note(lines):
     """导读顶部的「这期怎么读」。"""
     if not lines:
         return ""
-    body = "".join(f'<p style="margin:0 0 8px 0;font-size:15px;line-height:1.85;'
-                   f'color:#3a3a3a;letter-spacing:0.3px;">{esc(x)}</p>' for x in lines)
-    return ('<section style="margin:0 0 22px 0;padding:16px 16px;background:#f6f7f4;'
+    body = "".join(f'<p style="margin:0 0 8px 0;font-size:15px;line-height:1.75;'
+                   f'color:#3a3a3a;letter-spacing:0.5px;">{esc(x)}</p>' for x in lines)
+    return (f'<section style="margin:0 0 22px 0;padding:16px 16px;background:{C_QUOTE_BG};'
             'border-radius:6px;">'
-            f'<p style="margin:0 0 10px 0;font-size:13px;font-weight:700;color:{C_ACCENT};'
+            f'<p style="margin:0 0 10px 0;font-size:13px;font-weight:bold;color:{C_ACCENT};'
             'letter-spacing:1px;">这期怎么读</p>'
             + body + '</section>')
 
@@ -254,7 +262,7 @@ def header(issue):
         out.append(
             '<section style="margin:6px 0 18px 0;text-align:center;">'
             f'<p style="margin:0;font-size:15px;letter-spacing:2px;color:{C_ACCENT};'
-            f'font-weight:700;line-height:1.8;">{col}{sep}'
+            f'font-weight:bold;line-height:1.75;">{col}{sep}'
             f'<span style="color:{C_SUB};font-weight:400;">{no_txt}</span></p></section>')
 
     # 3. 栏目介绍
@@ -276,13 +284,13 @@ def header(issue):
     if menu:
         marks = "①②③④⑤⑥⑦⑧"
         rows = [f'<p style="margin:0 0 6px 0;font-size:15px;line-height:1.75;'
-                f'color:{C_TEXT};letter-spacing:0.3px;">'
-                f'<span style="color:{C_ACCENT};font-weight:700;">{marks[i]}</span>&nbsp;'
+                f'color:{C_TEXT};letter-spacing:0.5px;">'
+                f'<span style="color:{C_ACCENT};font-weight:bold;">{marks[i]}</span>&nbsp;'
                 f'{esc(m)}</p>' for i, m in enumerate(menu)]
         out.append('<section style="margin:14px 0 6px 0;padding:14px 16px;'
-                   f'background:#f6f7f4;border-radius:6px;">'
+                   f'background:{C_QUOTE_BG};border-radius:6px;">'
                    f'<p style="margin:0 0 8px 0;font-size:13px;color:{C_ACCENT};'
-                   f'font-weight:700;letter-spacing:1px;">本期看什么</p>'
+                   f'font-weight:bold;letter-spacing:1px;">本期看什么</p>'
                    + "".join(rows) + '</section>')
 
     # 6. 筛选原则
@@ -357,11 +365,12 @@ def body(issue):
     for line in issue.get("ending") or []:
         out.append(para(esc(line)))
     if issue.get("cta"):
-        out.append(para(f'<span style="color:{C_ACCENT};font-weight:700;">'
+        out.append(para(f'<span style="color:{C_ACCENT};font-weight:bold;">'
                         f'{esc(issue["cta"])}</span>'))
+    out.append(ending_mark())
 
-    wrap = ('<section style="font-family:' + FONT + ';font-size:16px;color:' + C_TEXT +
-            ';letter-spacing:0.4px;">' + "".join(out) + '</section>')
+    wrap = ('<section style="font-family:' + FONT + ';font-size:15px;color:' + C_TEXT +
+            ';letter-spacing:0.5px;">' + "".join(out) + '</section>')
     return wrap
 
 
@@ -388,33 +397,40 @@ def article_body(issue, item, idx, total):
     """一篇单项目深挖。字段缺了就跳过，方便先出骨架再补文案。"""
     out = [article_header(issue, item, idx, total)]
 
-    # 标题
+    # 标题 + 定位句 + 导语
     name = item.get("zh_name") or item["full_name"]
-    out.append(f'<section style="margin:0 0 10px 0;">'
-               f'<p style="margin:0;font-size:24px;font-weight:700;color:#141414;'
-               f'line-height:1.45;letter-spacing:0.2px;">{esc(name)}</p></section>')
+    out.append(f'<section style="margin:0 0 12px 0;">'
+               f'<p style="margin:0;font-size:20px;font-weight:bold;color:#1a1a1a;'
+               f'line-height:1.45;letter-spacing:0.5px;">{esc(name)}</p></section>')
     if item.get("kicker"):
-        out.append(para(esc(item["kicker"]), size="17px", color=C_ACCENT, weight="700", mb="14px"))
+        out.append(para(esc(item["kicker"]), size="14.5px", color=C_ACCENT, weight="bold", mb="0"))
     if item.get("lead"):
         out.append(quote(item["lead"]))
     out.append(figure(item["full_name"], item.get("figure_caption", "")))
+
+    # 小节自动编号（跳过缺的字段，编号顺延）
+    sec = [0]
+
+    def st(label):
+        sec[0] += 1
+        return sub_title(label, sec[0])
 
     for seg in (item.get("what") or []):
         out.append(para(esc(seg)))
 
     if item.get("pain"):
-        out.append(sub_title("它替你省掉哪件烦事"))
+        out.append(st("它替你省掉哪件烦事"))
         for seg in item["pain"]:
             out.append(para(esc(seg)))
 
     if item.get("check"):
-        out.append(sub_title("装之前，先确认三件事"))
-        out.append('<section style="margin:0 0 16px 0;padding:14px 16px;background:#faf9f6;'
+        out.append(st("装之前，先确认三件事"))
+        out.append('<section style="margin:0 0 18px 0;padding:14px 16px;background:#faf9f8;'
                    'border-radius:6px;">'
                    + "".join(kv_row(k, v) for k, v in item["check"]) + '</section>')
 
     if item.get("ai_why") or item.get("ai_prompt"):
-        out.append(sub_title("怎么装：让 AI 替你跑这一步"))
+        out.append(st("怎么装：让 AI 替你跑这一步"))
         for seg in (item.get("ai_why") or []):
             out.append(para(esc(seg)))
         if item.get("ai_prompt"):
@@ -427,17 +443,17 @@ def article_body(issue, item, idx, total):
             out.append(hint_block("用之前先知道", item["ai_warn"], tone="warm"))
 
     if item.get("manual"):
-        out.append(sub_title(item.get("manual_title") or "不想用 AI？手动三步"))
+        out.append(st(item.get("manual_title") or "不想用 AI？手动三步"))
         out.append(code_block(item["manual"], item.get("manual_label") or "命令行"))
         if item.get("manual_note"):
             out.append(para(esc(item["manual_note"])))
 
     if item.get("first"):
-        out.append(sub_title("第一次打开，先做这三件事"))
+        out.append(st("第一次打开，先做这三件事"))
         out.append(bullet_list(item["first"], marker="›"))
 
     if item.get("pits"):
-        out.append(sub_title("会踩到的坑"))
+        out.append(st("会踩到的坑"))
         out.append(pit_list(item["pits"]))
 
     if item.get("fit") or item.get("unfit"):
@@ -456,8 +472,10 @@ def article_body(issue, item, idx, total):
     out.append(link_slot(f"回《{back}》看这一期另外几个",
                          "导读已发布后，把这一框换成指向导读的链接"))
 
-    wrap = ('<section style="font-family:' + FONT + ';font-size:16px;color:' + C_TEXT +
-            ';letter-spacing:0.4px;">' + "".join(out) + '</section>')
+    out.append(ending_mark())
+
+    wrap = ('<section style="font-family:' + FONT + ';font-size:15px;color:' + C_TEXT +
+            ';letter-spacing:0.5px;">' + "".join(out) + '</section>')
     return wrap
 
 
@@ -474,20 +492,20 @@ def page(title, body_html, meta_html="", tips=TIPS_ISSUE, btn="复制正文（�
 <html lang="zh-CN"><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>{esc(title)}</title></head>
-<body style="margin:0;background:#f2f2ee;font-family:{FONT};">
+<body style="margin:0;background:#f2f2f2;font-family:{FONT};">
 <section style="max-width:760px;margin:0 auto;padding:18px 16px 60px 16px;">
 
-  <section style="background:#1f2a24;border-radius:10px;padding:16px 18px;margin-bottom:16px;">
-    <p style="margin:0 0 6px 0;color:#eae7df;font-size:14px;line-height:1.7;">
+  <section style="background:#1a1a1a;border-radius:10px;padding:16px 18px;margin-bottom:16px;">
+    <p style="margin:0 0 6px 0;color:#eaeaea;font-size:14px;line-height:1.7;">
       这是给公众号用的稿子。点下面按钮复制，粘进编辑器就能发 —— 图片要手动拖。
     </p>
-    <p style="margin:0 0 12px 0;color:#9fae9f;font-size:12px;line-height:1.7;">
+    <p style="margin:0 0 12px 0;color:#9a9a9a;font-size:12px;line-height:1.7;">
       {meta_html}
     </p>
-    <button onclick="copyBody()" style="background:#3ddc97;color:#10231a;border:0;
-      border-radius:6px;padding:10px 20px;font-size:15px;font-weight:700;cursor:pointer;">
+    <button onclick="copyBody()" style="background:#ba3b28;color:#ffffff;border:0;
+      border-radius:6px;padding:10px 20px;font-size:15px;font-weight:bold;cursor:pointer;">
       {btn}</button>
-    <span id="ok" style="color:#3ddc97;font-size:13px;margin-left:10px;opacity:0;">已复制</span>
+    <span id="ok" style="color:#ba3b28;font-size:13px;margin-left:10px;opacity:0;">已复制</span>
   </section>
 
   <section style="background:#ffffff;border-radius:10px;padding:26px 22px;
