@@ -21,6 +21,7 @@ sys.stdout.reconfigure(encoding="utf-8")
 HERE = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, os.path.join(HERE, "scripts"))
 
+import deploy  # noqa: E402
 import render  # noqa: E402
 import score as scorer  # noqa: E402
 import sources  # noqa: E402
@@ -293,6 +294,35 @@ def _verdict(p):
     return "；".join(clues[:2]) + "。"
 
 
+def _meta_rows(p):
+    rows = []
+    if p.get("lang"):
+        rows.append(["语言", p["lang"]])
+    if p.get("license"):
+        rows.append(["许可证", p["license"]])
+    if p.get("stars"):
+        rows.append(["star", f"{p['stars']:,}"])
+    if p.get("_age_days") is not None:
+        rows.append(["建库", f"{p['_age_days']} 天"])
+    return rows
+
+
+def _readme_paras(readme, n=3, minlen=36):
+    """从 README 里抠出能当正文的段落。只留中文段 —— 英文段落放进中文文章很出戏。"""
+    t = readme or ""
+    t = re.sub(r"```.*?```", "", t, flags=re.S)
+    t = re.sub(r"<[^>]+>", "", t)
+    t = re.sub(r"!\[[^\]]*\]\([^)]*\)", "", t)
+    t = re.sub(r"\[([^\]]+)\]\([^)]*\)", r"\1", t)
+    t = re.sub(r"^\s*\|.*$", "", t, flags=re.M)
+    t = re.sub(r"^\s*#{1,6}\s*.*$", "", t, flags=re.M)
+    t = re.sub(r"^\s*[-*]\s+", "", t, flags=re.M)
+    t = re.sub(r"^\s*>\s?", "", t, flags=re.M)
+    paras = [re.sub(r"\s+", " ", x).strip() for x in re.split(r"\n\s*\n", t)]
+    out = [x for x in paras if len(x) >= minlen and re.search(r"[\u4e00-\u9fa5]", x)]
+    return out[:n]
+
+
 def _why_now(p):
     age = p.get("_age_days")
     if p.get("source") == "new" or (age is not None and age <= 30):
@@ -307,14 +337,25 @@ P_PROFILE = os.path.join(D, "profile.json")
 
 
 def _build_menu(main, shorts):
-    """本期看点：一行一个，主打带一句短说明。"""
-    def cut(t, n=28):
+    """本期看点：一行一个，用短句不用仓库名。"""
+    def cut(t, n=34):
+        """按标点断句，别把「AI」切成「A…」。"""
         t = re.sub(r"\s+", " ", t or "").strip()
-        return t[:n] + ("…" if len(t) > n else "")
-    menu = [f"{main.get('zh_name') or main['full_name']} —— {cut(main.get('one_liner'))}"]
-    for s in shorts:
-        menu.append(f"{s.get('zh_name') or s['full_name']}")
-    return menu
+        if len(t) <= n:
+            return t
+        head = t[:n]
+        for sep in ["、", "，", "：", "；", " ", "。"]:
+            i = head.rfind(sep)
+            if i >= n // 2:
+                return head[:i]
+        return head + "…"
+
+    def one(x):
+        name = x.get("zh_name") or x["full_name"]
+        line = x.get("kicker") or x.get("one_liner") or ""
+        return f"{name} —— {cut(line)}" if line else name
+
+    return [one(main)] + [one(s) for s in shorts]
 
 
 def _next_issue_no():
@@ -342,8 +383,10 @@ def _draft(args, main, shorts, pool, dropped):
     issue_no = _next_issue_no()
 
     def pack(p, is_main):
+        slug = p["full_name"].split("/")[-1].replace(".", "-").lower()
         d = {
             "full_name": p["full_name"],
+            "slug": slug,
             "zh_name": p.get("name"),
             "one_liner": _first_sentence(p.get("desc")),
             "url": p.get("url"),
@@ -352,15 +395,29 @@ def _draft(args, main, shorts, pool, dropped):
             "form": p["form"],
             "score": p["score"],
             "og": p.get("og"),
+            "deep": False,
+            "kicker": "",
+            "lead": _first_sentence(p.get("desc")),
+            "summary": [p.get("desc") or ""],
+            "teaser": "",
+            "meta": _meta_rows(p),
+            "figure_caption": f"{p['full_name']} · {p['form']}",
             "_auto": True,
         }
+        # 深挖用的兜底：AI 提示词是规则生成也能用，正文段落只是占位
+        d.update({
+            "ai_prompt": deploy.prompt_tv(d, "<电视IP>") if p["form"] in ("电视/Android", "手机/电视 App")
+                        else deploy.prompt_for(d),
+            "ai_prompt_label": "复制下面这段，发给能操作你电脑的 AI",
+            "manual": _extract_steps(p.get("readme", ""), p.get("name", "")),
+            "what": _readme_paras(p.get("readme", ""), 2),
+        })
         if is_main:
             d.update({
                 "why_now": _why_now(p),
                 "pain": PAIN_TPL.get(p["form"], PAIN_TPL["网页应用"]),
                 "steps": _extract_steps(p.get("readme", ""), p.get("name", "")),
                 "verdict": _verdict(p),
-                "figure_caption": f"{p['full_name']} · {p['form']}",
             })
         else:
             d["verdict"] = _verdict(p)
@@ -368,16 +425,22 @@ def _draft(args, main, shorts, pool, dropped):
 
     tpl = TITLE_TPL[issue_no % len(TITLE_TPL)].format(n=n)
     prof = prof0
+    packed = [pack(main, True)] + [pack(s, False) for s in shorts]
+    # 出几篇单篇：默认全部（用户要的是"每个项目一篇"），--deep 0 也是全部
+    dcount = len(packed) if (args.deep or 0) <= 0 else min(args.deep, len(packed))
+    for x in packed[:dcount]:
+        x["deep"] = True
+        x["link_label"] = f"《{x.get('zh_name') or x['full_name']}：完整安装步骤》"
     issue = {
         "date": today(),
         "issue_no": issue_no,
         "first_issue": issue_no <= 1,
         "profile": prof,
-        "menu": _build_menu(pack(main, True), [pack(s, False) for s in shorts]),
+        "menu": _build_menu(packed[0], packed[1:]),
         "title": tpl,
         "intro": [INTRO_TPL[0].format(i=1)],
-        "main": pack(main, True),
-        "shorts": [pack(s, False) for s in shorts],
+        "main": packed[0],
+        "shorts": packed[1:],
         "ending": [_pick_rotating(prof0.get("ending_pool"), issue_no)],
         "cta": _pick_rotating(prof0.get("cta_pool"), issue_no),
         "stats": {"pool": len(pool), "mode": "token" if load(P_POOL).get("mode") == "token" else "匿名抓取"},
@@ -388,7 +451,15 @@ def _draft(args, main, shorts, pool, dropped):
 
 # ---------------------------------------------------------------- 待写清单
 
+DEEP_FIELDS = ["kicker", "lead", "what", "pain", "check", "ai_why", "ai_prompt",
+               "ai_follow", "manual", "first", "pits", "fit", "unfit", "verdict"]
+DEEP_OPTIONAL = ["meta", "teaser", "summary", "ai_warn", "manual_title", "manual_note"]
+
+
 def _fields_of(item, is_main):
+    if item.get("deep"):
+        # 出了单篇的，导读只留摘要 + 钩子，正文全在单篇里
+        return ["kicker", "summary", "teaser"]
     return (["zh_name", "one_liner", "why_now", "pain", "steps", "verdict"]
             if is_main else ["zh_name", "one_liner", "verdict"])
 
@@ -410,7 +481,18 @@ def _write_todo(issue):
                       "form": s["form"], "score": s["score"],
                       "desc": s.get("one_liner"), "need": _fields_of(s, False),
                       "fill": {k: "" for k in _fields_of(s, False)}})
-    save(P_TODO, {"issue": issue["date"], "count": len(items), "items": items,
+    arts = []
+    for i, it in enumerate([issue["main"]] + (issue.get("shorts") or []), 1):
+        if not it.get("deep"):
+            continue
+        arts.append({
+            "which": f"article{i}", "slug": it.get("slug"), "full_name": it["full_name"],
+            "zh_name": it.get("zh_name") or it["full_name"],
+            "need": DEEP_FIELDS, "optional": DEEP_OPTIONAL,
+            "fill": {k: "" for k in DEEP_FIELDS},
+        })
+    save(P_TODO, {"issue": issue["date"], "count": len(items) + len(arts),
+                  "items": items, "articles": arts,
                   "_说明": "把 fill 里每个字段写成给人看的中文，存成 data/write.json，"
                            "然后 python scripts/digest.py apply"})
 
@@ -478,6 +560,12 @@ def cmd_todo(args):
         log(f"[{it['which']}] {it['full_name']}（{it['form']} · {it['score']} 分）")
         log(f"    现在：{it['desc']}")
         log(f"    要写：{'、'.join(it['need'])}\n")
+    if todo.get("articles"):
+        log(f"\n另有 {len(todo['articles'])} 篇单篇要写（每篇 {len(DEEP_FIELDS)} 个字段）：\n")
+        for a in todo["articles"]:
+            log(f"[{a['which']}] {a['zh_name']}（{a['full_name']}）")
+            log(f"    必写：{'、'.join(a['need'])}")
+            log(f"    可选：{'、'.join(a['optional'])}\n")
     log("清单已存 data/todo_write.json。写完存 data/write.json 再 apply。")
     return 0
 
@@ -498,8 +586,11 @@ def cmd_apply(args):
         tgt = idx.get(it.get("which") or "") or by_name.get(it.get("full_name") or "")
         if not tgt:
             continue
-        for k, v in (it.get("fill") or {}).items():
-            if v not in (None, "", []):
+        # 两种写法都收：{which, fill:{...}} 和 {which, 字段直接铺平}
+        payload = it.get("fill") or {k: v for k, v in it.items()
+                                     if k not in ("which", "full_name", "fill")}
+        for k, v in payload.items():
+            if v not in (None, "", [], {}):
                 tgt[k] = v
                 n += 1
         tgt["_auto"] = False
@@ -520,9 +611,32 @@ def cmd_apply(args):
         issue["guide"] = w["guide"]
     if w.get("header_lines"):
         issue["profile"] = {**(issue.get("profile") or {}), "intro_lines": w["header_lines"]}
+    if w.get("read_note"):
+        issue["read_note"] = w["read_note"]
+
+    # 链接位的文字跟着「改完之后的标题」走，别还挂着仓库名
+    for x in [issue["main"]] + (issue.get("shorts") or []):
+        if x.get("deep"):
+            x["link_label"] = f"《{x.get('zh_name') or x['full_name']}：完整安装步骤》"
+
+    # 单篇正文
+    na = 0
+    arts = w.get("articles") or []
+    by_slug = {it.get("slug"): it for it in [issue["main"]] + (issue.get("shorts") or [])}
+    for a in arts:
+        tgt = by_slug.get(a.get("slug")) or by_name.get(a.get("full_name") or "")
+        if not tgt:
+            continue
+        for k, v in a.items():
+            if k in ("slug", "full_name", "which"):
+                continue
+            if v not in (None, "", [], {}):
+                tgt[k] = v
+                na += 1
+        tgt["_auto"] = False
     save(P_ISSUE, issue)
     left = sum(1 for v in idx.values() if v.get("_auto"))
-    log(f"[OK] 写回 {n} 个字段")
+    log(f"[OK] 写回 {n} 个字段" + (f"，单篇 {na} 个字段" if na else ""))
     log("还有 {} 个位置是规则文案{}".format(
         left, "，跑 todo 看看" if left else "，可以 render 了"))
     return 0
@@ -538,7 +652,7 @@ def cmd_render(args):
     issue["date"] = issue.get("date") or today()
     txt = json.dumps(issue, ensure_ascii=False)
     issue["word_count"] = len(re.findall(r"[\u4e00-\u9fa5]", txt))
-    p_html, p_md, p_fig = render.write_files(issue, REPORTS)
+    made, p_fig, p_link = render.write_files(issue, REPORTS)
 
     st = load(P_STATE)
     st["issue_no"] = issue["issue_no"]
@@ -556,13 +670,15 @@ def cmd_render(args):
     save(P_SEEN, seen)
 
     auto = sum(1 for it in [issue["main"]] + (issue.get("shorts") or []) if it.get("_auto"))
-    log(f"[OK] 稿子 -> {p_html}")
-    log(f"     md  -> {p_md}")
-    log(f"     配图 -> {p_fig}")
+    log(f"[OK] 出了 {len(made)} 篇：")
+    for tag, title, h, m in made:
+        log(f"  {tag:6s} {title[:30]:32s} {os.path.basename(h)}")
+    log(f"\n     配图清单 -> {os.path.basename(p_fig)}")
+    log(f"     链接清单 -> {os.path.basename(p_link)}")
     if auto:
         log(f"\n[!] 还有 {auto} 个位置是规则文案。发之前先 todo → 写 → apply → render。")
     else:
-        log("\n全部人写的，可以发了。别忘了：图片手动拖、外链放阅读原文。")
+        log("\n全部人写的，可以发了。顺序：先发单篇拿链接 → 再发导读插链接。")
     return 0
 
 
@@ -618,10 +734,13 @@ def main():
     p.add_argument("--detail-cap", type=int, default=0, dest="detail_cap")
     p.add_argument("--allow-repeat", action="store_true", dest="allow_repeat")
     p.add_argument("--force", action="store_true", help="分不够也硬出一期")
+    p.add_argument("--deep", type=int, default=0,
+                   help="出几篇单篇深挖（默认 0 = 每个项目都出一篇）")
 
     p = sub.add_parser("pick")
     p.add_argument("--main", required=True, help="主打项目 owner/repo")
-    p.add_argument("--shorts", default="", help="短评，逗号分隔的 owner/repo")
+    p.add_argument("--shorts", default="", help="其余项目，逗号分隔的 owner/repo")
+    p.add_argument("--deep", type=int, default=0, help="出几篇单篇（0 = 全部）")
     sub.add_parser("todo")
     sub.add_parser("apply")
     p = sub.add_parser("render")
