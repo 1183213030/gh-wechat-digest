@@ -39,7 +39,7 @@ description: 从 GitHub 找有意思、有用的开源项目，打包成一组�
 | 2 | 抓 + 选 + 出骨架 | `python scripts/digest.py run` | — |
 | 3 | 看要写哪几段 | `python scripts/digest.py todo` | — |
 | 4 | **自己写文案**（见第四节） | 写 `data/write.json` → `apply` | 交出去的是模板文案 |
-| 5 | 出稿 | `python scripts/digest.py render` | — |
+| 5 | 出稿 + 封面 | `python scripts/digest.py render` | 封面要浏览器，找不到 Chrome/Edge 时 `--no-cover` 跳过 |
 | 6 | 交付 | 给出**全部 HTML 路径** + 待插链接清单 + 一句话说清「这期主打哪个、为什么」 | 用户不知道先发哪篇 |
 
 **选题不合口味就手动点名**，别跟公式较劲：
@@ -168,6 +168,12 @@ python scripts/digest.py history        # 看发过几期、发过哪些项目
 - **AI 部署板块不许编造**：有官方 Agent 说明的项目照抄（注明来源），没有的按 deploy.py 模板生成；提示词里的验收命令必须是 README 里出现过的，或者通用到不会出错（`--help`、打印版本号）。
 - 正文里不要放 Markdown 链接（微信点不动），GitHub 地址会自动作为文本行输出。
 - 一期默认每个项目都出单篇；赶时间或项目太薄时用 `--deep N` 只给前 N 个出，其余回退成短评。
+
+### 封面图是自动的
+
+每篇（导读 + 每篇单篇）自动出两张封面：**首图 2.35:1（900x383）** 和 **次条/转发卡 1:1（500x500）**，按 2x 渲染，微信压缩后文字边缘不糊。存放在 `data/covers/`，`render` 自动生成，也可单独重跑 `cover` 命令。
+
+实现是 Chrome headless 渲染 HTML 模板 → PNG（`scripts/cover.py`），**不装 PIL**。三个坑都踩过并写在代码注释里：折行估算必须算 letter-spacing；临时文件走 ASCII 路径（Chrome 对中文 `file:///` 会静默失败）；封面文案取 `kicker` 而不是 one_liner（后者多半是英文原句，放中文封面上出戏）。
 
 ### 标题
 

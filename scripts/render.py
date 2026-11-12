@@ -707,10 +707,8 @@ def write_files(issue, out_dir):
     p_fig = os.path.join(out_dir, f"issue_{date}_配图清单.txt")
     with open(p_fig, "w", encoding="utf-8") as f:
         f.write(f"本期配图（另存后插入正文对应位置）\n日期 {date}\n")
-        f.write("封面图在公众号后台单独上传，不占正文；正文里只放每张 og 图。\n\n")
-        f.write("== 导读 ==\n")
-        f.write(f"封面 2.35:1（900x383）建议用主打项目 og 图裁切\n"
-                f"    https://opengraph.githubassets.com/1/{items[0]['full_name']}\n\n")
+        f.write("封面图会由 cover 步骤自动生成（存放在 data/covers/），后台每篇单独上传；\n"
+                "正文里只放每张 og 图的本地副本。\n\n")
         for i, it in enumerate(items, 1):
             f.write(f"[{i}] {it['full_name']}\n"
                     f"    https://opengraph.githubassets.com/1/{it['full_name']}\n")

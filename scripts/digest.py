@@ -21,6 +21,7 @@ sys.stdout.reconfigure(encoding="utf-8")
 HERE = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, os.path.join(HERE, "scripts"))
 
+import cover  # noqa: E402
 import deploy  # noqa: E402
 import render  # noqa: E402
 import score as scorer  # noqa: E402
@@ -35,6 +36,7 @@ P_STATE = os.path.join(D, "state.json")
 P_SEEN = os.path.join(D, "seen.json")
 P_PUB = os.path.join(D, "published.json")
 REPORTS = os.path.join(D, "reports")
+COVERS = os.path.join(D, "covers")
 
 COOLDOWN_DAYS = 30
 MAIN_MIN = 55          # 主打最低分，低于这个宁可这期少一个
@@ -673,12 +675,54 @@ def cmd_render(args):
     log(f"[OK] 出了 {len(made)} 篇：")
     for tag, title, h, m in made:
         log(f"  {tag:6s} {title[:30]:32s} {os.path.basename(h)}")
+    # 封面：每篇 2.35:1 + 1:1，浏览器渲染，不用装任何图像库
+    if not args.no_cover:
+        covers, cerr = cover.build(issue, COVERS)
+        if cerr:
+            log(f"\n[!] 封面没生成：{cerr}")
+        elif covers:
+            _append_covers(p_fig, covers)
+            log(f"     封面 {len(covers)} 张 -> data/covers/")
+
     log(f"\n     配图清单 -> {os.path.basename(p_fig)}")
     log(f"     链接清单 -> {os.path.basename(p_link)}")
     if auto:
         log(f"\n[!] 还有 {auto} 个位置是规则文案。发之前先 todo → 写 → apply → render。")
     else:
         log("\n全部人写的，可以发了。顺序：先发单篇拿链接 → 再发导读插链接。")
+    return 0
+
+
+def _append_covers(p_fig, covers):
+    """封面段写进配图清单。重跑时替换旧段，不叠两遍。"""
+    sec = "\n== 封面（后台单独上传，每篇两张：首图 2.35:1 + 次条/转发 1:1）==\n" \
+          + "".join(f"[{tag}] {cp}\n" for tag, cp, _ in covers)
+    try:
+        cur = open(p_fig, encoding="utf-8").read()
+    except OSError:
+        cur = ""
+    if "== 封面" in cur:
+        cur = re.split(r"\n== 封面", cur)[0].rstrip("\n")
+    with open(p_fig, "w", encoding="utf-8") as f:
+        f.write(cur + sec)
+
+
+def cmd_cover(args):
+    """单独重出封面（改了文案 / 换了主题之后用）。"""
+    issue = load(P_ISSUE)
+    if not issue:
+        log("[!] 没有稿件，先跑 run")
+        return 1
+    covers, cerr = cover.build(issue, COVERS)
+    if cerr:
+        log(f"[!] {cerr}")
+        return 1
+    p_fig = os.path.join(REPORTS, f"issue_{issue.get('date') or today()}_配图清单.txt")
+    if covers and os.path.exists(p_fig):
+        _append_covers(p_fig, covers)
+    log(f"[OK] 封面 {len(covers)} 张 -> data/covers/")
+    for tag, cp, note in covers:
+        log(f"  {tag:4s} {os.path.basename(cp)}")
     return 0
 
 
@@ -744,6 +788,8 @@ def main():
     sub.add_parser("todo")
     sub.add_parser("apply")
     p = sub.add_parser("render")
+    p.add_argument("--no-cover", action="store_true", help="跳过封面生成")
+    p = sub.add_parser("cover")
     p.add_argument("--out", default="")
     p = sub.add_parser("log")
     p.add_argument("--url", default="")
@@ -755,7 +801,8 @@ def main():
         ap.print_help()
         return 0
     fn = {"doctor": cmd_doctor, "run": cmd_run, "pick": cmd_pick, "todo": cmd_todo, "apply": cmd_apply,
-          "render": cmd_render, "log": cmd_log, "history": cmd_history}[args.cmd]
+          "render": cmd_render, "cover": cmd_cover,
+          "log": cmd_log, "history": cmd_history}[args.cmd]
     return fn(args) or 0
 
 
