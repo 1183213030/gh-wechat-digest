@@ -431,7 +431,7 @@ def _draft(args, main, shorts, pool, dropped):
     dcount = len(packed) if (args.deep or 0) <= 0 else min(args.deep, len(packed))
     for x in packed[:dcount]:
         x["deep"] = True
-        x["link_label"] = f"《{x.get('zh_name') or x['full_name']}：完整安装步骤》"
+        x["link_label"] = f"{x.get('zh_name') or x['full_name']}（完整安装步骤）"
     issue = {
         "date": today(),
         "issue_no": issue_no,
@@ -618,7 +618,7 @@ def cmd_apply(args):
     # 链接位的文字跟着「改完之后的标题」走，别还挂着仓库名
     for x in [issue["main"]] + (issue.get("shorts") or []):
         if x.get("deep"):
-            x["link_label"] = f"《{x.get('zh_name') or x['full_name']}：完整安装步骤》"
+            x["link_label"] = f"{x.get('zh_name') or x['full_name']}（完整安装步骤）"
 
     # 单篇正文
     na = 0
