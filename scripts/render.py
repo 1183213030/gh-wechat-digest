@@ -51,6 +51,47 @@ def esc(s):
     return html.escape(str(s or ""), quote=False)
 
 
+# 小节标题的 emoji：给长文加节奏，纯文字小标题连排五行容易让人划走。
+# 映射按标题前缀匹配，write.json 里自定义标题没匹配上就不加，不强凑。
+EMOJI_TITLES = [
+    ("它替你省掉哪件烦事", "😤"),
+    ("装之前，先确认三件事", "📋"),
+    ("怎么装：让 AI 替你跑这一步", "🤖"),
+    ("第一次打开，先做这三件事", "👀"),
+    ("会踩到的坑", "⚠️"),
+    ("不想用 AI？手动", "⌨️"),
+    ("三步用起来", "🚀"),
+    ("这期怎么读", "📖"),
+    ("本期看什么", "📑"),
+    ("用之前先知道", "💡"),
+    ("适合", "✅"),
+    ("不适合", "🚫"),
+]
+
+
+def _emojify(title):
+    t = str(title or "")
+    for key, emoji in EMOJI_TITLES:
+        if t.startswith(key):
+            return f"{emoji} {esc(t)}"
+    return esc(t)
+
+
+def meme_slot(tip="放一张和这里内容对得上的表情包，微信里搜现成的就行"):
+    """表情包/配图占位框。小白读者看纯文字容易划走，大节之间垫一张图换口气。
+
+    微信正文图必须手动插，所以这里给占位框 + 具体建议（放什么、去哪找），
+    发布时插好图删掉框。
+    """
+    return (f'<section style="margin:20px 0;padding:12px 14px;'
+            f'border:1px dashed {C_HAIRLINE};border-radius:6px;'
+            f'background:#ffffff;text-align:center;">'
+            f'<p style="margin:0 0 4px 0;font-size:14px;color:{C_ACCENT};'
+            f'line-height:1.75;letter-spacing:0.5px;">😄［这里放一张表情包］</p>'
+            f'<p style="margin:0;font-size:12px;color:{C_SUB};line-height:1.7;">'
+            f'建议：{esc(tip)}</p></section>')
+
+
 # ---------------------------------------------------------------- 小块
 
 def para(text, color=C_TEXT, size="15px", weight="400", mt="0", mb="18px", align="justify", lh="1.75"):
@@ -77,11 +118,11 @@ def section_title(text, num=""):
 
 
 def sub_title(text, num=""):
-    """单篇内的小节标题，同一套「01｜」编号，略小一档。"""
+    """单篇内的小节标题，同一套「01｜」编号，略小一档。带 emoji 调节奏。"""
     prefix = f"{int(num):02d}｜" if num else ""
     return (f'<section style="margin:36px 0 18px 0;">'
             f'<p style="margin:0;font-size:16.5px;font-weight:bold;color:#1a1a1a;'
-            f'letter-spacing:0.5px;line-height:1.4;">{esc(prefix)}{esc(text)}</p></section>')
+            f'letter-spacing:0.5px;line-height:1.4;">{esc(prefix)}{_emojify(text)}</p></section>')
 
 
 def figure(full_name, caption="", compact=False):
@@ -114,7 +155,7 @@ def steps_block(steps):
     out = ['<section style="margin:0 0 18px 0;padding:14px 16px;background:#f6f6f6;'
            'border-radius:6px;">',
            f'<p style="margin:0 0 8px 0;font-size:13px;color:{C_ACCENT};'
-           f'font-weight:bold;letter-spacing:1px;">三步用起来</p>']
+           f'font-weight:bold;letter-spacing:1px;">{_emojify("三步用起来")}</p>']
     for i, s in enumerate(steps, 1):
         out.append(f'<p style="margin:0 0 6px 0;font-size:15px;line-height:1.75;'
                    f'color:{C_TEXT};letter-spacing:0.5px;">'
@@ -133,13 +174,66 @@ def verdict_block(text):
             f'text-align:justify;">{esc(text)}</p>')
 
 
-def link_line(url, stars="", lang=""):
-    meta = " · ".join([x for x in [f"{stars:,} star" if stars else "", lang] if x])
-    meta_html = (f'<span style="color:{C_SUB};font-size:13px;">（{esc(meta)}）</span>'
-                 if meta else "")
-    return (f'<p style="margin:0 0 8px 0;font-size:14px;line-height:1.75;'
-            f'color:{C_ACCENT};word-break:break-all;letter-spacing:0.5px;">'
-            f'{esc(url)}{meta_html}</p>')
+def link_line(url, stars="", lang="", form=""):
+    """导读里的项目地址行，小白版：链接前先说清「这串是干嘛的、拿到手怎么用」。
+
+    小白不认识 star 也不认识 Kotlin，所以语言不出现，星数换成口语解释。
+    """
+    if not url:
+        return ""
+    bits = []
+    if isinstance(stars, int) and stars > 0:
+        bits.append(f"⭐ {stars:,} 星")
+    if form:
+        bits.append(f"形态：{form}")
+    meta_html = (f'<p style="margin:0 0 4px 0;font-size:12px;color:{C_SUB};'
+                 f'line-height:1.6;letter-spacing:0.5px;">'
+                 f'{" · ".join(bits)}（星 = 开发者界的点赞收藏）</p>' if bits else "")
+    return ('<section style="margin:0 0 14px 0;">'
+            f'<p style="margin:0 0 4px 0;font-size:14px;color:{C_TEXT};'
+            f'line-height:1.75;letter-spacing:0.5px;">🔗 项目地址 —— '
+            f'<span style="color:#555555;">全英文页面，看不懂没关系，'
+            f'复制这串网址发给 AI，说一句「帮我装这个」</span>：</p>'
+            f'<p style="margin:0 0 6px 0;font-size:14px;line-height:1.75;'
+            f'color:{C_ACCENT};word-break:break-all;letter-spacing:0.5px;'
+            f'font-weight:bold;">{esc(url)}</p>'
+            + meta_html + '</section>')
+
+
+def repo_block(item):
+    """单篇结尾的项目地址块：比导读版多说一句「这是什么地方」。
+
+    小白第一次接触 GitHub，最需要的解释是两件事：这页面是干嘛的（程序员放
+    作品的仓库）、拿到链接怎么用（丢给 AI 一句话）。星数放最后当背书。
+    """
+    url = item.get("url") or ""
+    if not url:
+        return ""
+    stars = item.get("stars")
+    form = item.get("form") or ""
+    bits = []
+    if isinstance(stars, int) and stars > 0:
+        bits.append(f"⭐ {stars:,} 个开发者收藏过")
+    if form:
+        bits.append(f"形态：{form}")
+    meta_html = (" · ".join(bits) if bits else "")
+    return (f'<section style="margin:26px 0 18px 0;padding:16px 16px;'
+            f'background:{C_QUOTE_BG};border-radius:6px;">'
+            f'<p style="margin:0 0 8px 0;font-size:15px;font-weight:bold;'
+            f'color:{C_ACCENT};line-height:1.75;letter-spacing:0.5px;">'
+            f'🔗 项目地址（怎么用）</p>'
+            f'<p style="margin:0 0 10px 0;font-size:15px;line-height:1.75;'
+            f'color:{C_TEXT};letter-spacing:0.5px;">这是 GitHub 的页面 —— '
+            f'相当于全世界程序员放作品的地方，点开全是英文很正常，'
+            f'<b>不用看懂</b>。你只要复制下面这串网址，发给能操作电脑的 AI'
+            f'（WorkBuddy、豆包都行），再说一句「帮我装这个」，剩下的交给它。</p>'
+            f'<p style="margin:0 0 8px 0;padding:10px 12px;background:#ffffff;'
+            f'border:1px solid {C_HAIRLINE};border-radius:6px;font-size:14px;'
+            f'line-height:1.7;color:#2b2b2b;font-family:{MONO};'
+            f'word-break:break-all;">{esc(url)}</p>'
+            + (f'<p style="margin:0;font-size:13px;color:{C_SUB};line-height:1.7;'
+               f'letter-spacing:0.5px;">{esc(meta_html)}</p>' if meta_html else "")
+            + '</section>')
 
 
 def divider():
@@ -216,7 +310,7 @@ def hint_block(title, lines, tone="green"):
     return (f'<section style="margin:0 0 18px 0;padding:14px 16px;background:{C_QUOTE_BG};'
             f'border-radius:6px;">'
             f'<p style="margin:0 0 8px 0;font-size:13px;font-weight:bold;color:{C_ACCENT};'
-            f'letter-spacing:1px;">{esc(title)}</p>{body}</section>')
+            f'letter-spacing:1px;">{_emojify(title)}</p>{body}</section>')
 
 
 def link_slot(label="", note="发布后在这里插入超链接"):
@@ -243,7 +337,7 @@ def index_note(lines):
     return (f'<section style="margin:0 0 22px 0;padding:16px 16px;background:{C_QUOTE_BG};'
             'border-radius:6px;">'
             f'<p style="margin:0 0 10px 0;font-size:13px;font-weight:bold;color:{C_ACCENT};'
-            'letter-spacing:1px;">这期怎么读</p>'
+            'letter-spacing:1px;">' + _emojify("这期怎么读") + '</p>'
             + body + '</section>')
 
 
@@ -309,7 +403,7 @@ def header(issue):
         out.append('<section style="margin:14px 0 6px 0;padding:14px 16px;'
                    f'background:{C_QUOTE_BG};border-radius:6px;">'
                    f'<p style="margin:0 0 8px 0;font-size:13px;color:{C_ACCENT};'
-                   f'font-weight:bold;letter-spacing:1px;">本期看什么</p>'
+                   f'font-weight:bold;letter-spacing:1px;">' + _emojify("本期看什么") + '</p>'
                    + "".join(rows) + '</section>')
 
     # 6. 筛选原则
@@ -364,7 +458,7 @@ def body(issue):
             out.append(link_slot(
                 it.get("link_label") or f"《{name}：{it.get('kicker') or '完整安装步骤'}》",
                 it.get("link_note") or "发布单篇后，在编辑器里用「链接」按钮选中这一框，指向那篇"))
-            out.append(link_line(it.get("url", ""), it.get("stars"), it.get("lang")))
+            out.append(link_line(it.get("url", ""), it.get("stars"), "", it.get("form", "")))
             out.append(divider())
         else:
             out.append(section_title(name, str(i)))
@@ -378,7 +472,7 @@ def body(issue):
                 out.append(para(esc(it["pain"])))
             out.append(steps_block(it.get("steps") or []))
             out.append(verdict_block(it.get("verdict")))
-            out.append(link_line(it.get("url", ""), it.get("stars"), it.get("lang")))
+            out.append(link_line(it.get("url", ""), it.get("stars"), "", it.get("form", "")))
             out.append(divider())
 
     for line in issue.get("ending") or []:
@@ -437,6 +531,12 @@ def article_body(issue, item, idx, total):
     for seg in (item.get("what") or []):
         out.append(para(esc(seg)))
 
+    # 大节之间垫一张表情包/配图，纯文字连排会让人划走（建议文案随内容走）
+    if (item.get("what") or []) and (item.get("pain") or item.get("check")):
+        out.append(meme_slot(
+            "放这个项目的运行截图最直观（去仓库 README 里截一张），"
+            "或者一张「有点东西」的表情包"))
+
     if item.get("pain"):
         out.append(st("它替你省掉哪件烦事"))
         for seg in item["pain"]:
@@ -474,6 +574,9 @@ def article_body(issue, item, idx, total):
     if item.get("pits"):
         out.append(st("会踩到的坑"))
         out.append(pit_list(item["pits"]))
+        out.append(meme_slot(
+            "放一张踩坑/头大主题的表情包换口气，微信里搜「程序员 踩坑 表情包」"
+            "一堆现成的"))
 
     if item.get("fit") or item.get("unfit"):
         if item.get("fit"):
@@ -484,7 +587,7 @@ def article_body(issue, item, idx, total):
     if item.get("verdict"):
         out.append(verdict_block(item["verdict"]))
 
-    out.append(link_line(item.get("url", ""), item.get("stars"), item.get("lang")))
+    out.append(repo_block(item))
 
     # 回导读
     back = issue.get("title") or "本期合集"
@@ -502,8 +605,9 @@ def article_body(issue, item, idx, total):
 
 TIPS_ISSUE = ("粘贴提示：正文图片微信不认外链，占位框里的 og 图请先另存再插入；"
               "GitHub 地址正文里点不动，需要留一个可点的就往「阅读原文」里放。")
-TIPS_ARTICLE = ("粘贴提示：单篇里有两个「链接位」——顶部回导读、正文里的 GitHub 地址。"
-                "回导读的框，等导读发布后用编辑器「链接」按钮指向它；GitHub 地址只能作纯文本。")
+TIPS_ARTICLE = ("粘贴提示：单篇里有一个「链接位」（回导读，等导读发布后用编辑器「链接」按钮指向它）；"
+                "两个「表情包位」——插好图后把虚线框删掉；"
+                "结尾的项目地址块是给小白读者看的说明，链接本身点不动，属正常。")
 
 
 def page(title, body_html, meta_html="", tips=TIPS_ISSUE, btn="复制正文（富文本）"):
@@ -620,7 +724,8 @@ def markdown(issue):
                     L.append(f"{k}. {s}\n")
             if it.get("verdict"):
                 L.append(f"\n**说句实话**：{it['verdict']}\n")
-        L.append(f"\n{it.get('url','')}（{it.get('stars','')} star · {it.get('lang','')}）\n")
+        L.append(f"\n项目地址（复制发给 AI，说「帮我装这个」）：{it.get('url','')}\n"
+                 f"（⭐ {it.get('stars','')} 人收藏 · 形态：{it.get('form','')}）\n")
 
     for line in issue.get("ending") or []:
         L.append(f"\n{line}\n")
@@ -688,7 +793,9 @@ def article_markdown(issue, item, idx, total):
         L.append("## 不适合\n\n" + "".join(f"- {x}\n" for x in item["unfit"]) + "\n")
     if item.get("verdict"):
         L.append(f"**说句实话**：{item['verdict']}\n\n")
-    L.append(f"{item.get('url','')}（{item.get('stars','')} star · {item.get('lang','')}）\n\n")
+    L.append("**项目地址（全英文页面，复制发给 AI，说「帮我装这个」就能装）**\n\n")
+    L.append(f"{item.get('url','')}\n\n")
+    L.append(f"（⭐ {item.get('stars','')} 个开发者收藏过 · 形态：{item.get('form','')}）\n\n")
     L.append(f"**[回导读链接位] 《{issue.get('title','')}》**\n")
     return "".join(L)
 
