@@ -105,6 +105,69 @@ def is_hex(s):
     return bool(re.fullmatch(r"#?[0-9a-fA-F]{6}", (s or "").strip()))
 
 
+# 语言色：GitHub linguist 的主语言色，正文强调色用它当种子。
+# 用户的原则是「每篇的配色跟文章主题走」，最稳定的「主题信号」就是仓库主语言——
+# Python 蓝调、Rust 橙调、Kotlin 紫……每个语言一挂上色，一期的四篇自然就各有性格。
+# 注意 linguist 原色很多太荧光（Shell 的绿、JS 的黄），进正文前都要过 tune() 压一压。
+LANG_COLORS = {
+    "Python": "#3572A5", "Kotlin": "#A97BFF", "TypeScript": "#3178C6",
+    "JavaScript": "#C79A15", "Rust": "#B4713E", "Go": "#0089A8",
+    "Java": "#B07219", "C": "#555555", "C++": "#C13B66", "C#": "#178600",
+    "Shell": "#3E9649", "HTML": "#C2431D", "CSS": "#7A5CB0", "Vue": "#359468",
+    "Dart": "#00948F", "PHP": "#5C6BA1", "Ruby": "#9B1B30", "Swift": "#C74535",
+    "Lua": "#4C4C9E", "Jupyter Notebook": "#C2520E", "Zig": "#C69A00",
+    "MDX": "#2A56A5", "Markdown": "#2A56A5", "Blade": "#9E5C2E",
+}
+
+# 正文强调色的亮度区间：太亮像高亮笔，太暗发闷。砖红/墨绿/靛蓝都在这个带里。
+# 上限要压得比较狠：蓝紫色的蓝光通道亮度权重小，0.30 的亮紫看起来还是像粉笔，
+# 0.24 以下才会沉下来。
+LUM_MIN, LUM_MAX = 0.09, 0.24
+
+
+def tune(h):
+    """把任意颜色拉进正文强调色可用的亮度带。
+
+    linguist 的语言色直接当强调色大多不行：JS 的黄、Shell 的绿亮度 0.6+，
+    白底上一大片像荧光笔。往黑里压（亮度高）或往白里提（太暗），调到带内就停。
+    饱和度高的荧光感也会随压暗一起降下来。
+    """
+    c = h
+    if lum(c) > LUM_MAX:
+        for i in range(60):
+            c = dark(h, i * 0.03)
+            if lum(c) <= LUM_MAX:
+                return c
+        return dark(h, 0.9)
+    if lum(c) < LUM_MIN:
+        for i in range(60):
+            c = light(h, i * 0.03)
+            if lum(c) >= LUM_MIN:
+                return c
+        return light(h, 0.6)
+    return h
+
+
+def for_article(item, fallback=None):
+    """单篇的主题色，优先级：手动 theme 字段 > 主语言推导 > 账号主色。
+
+    item 里的 theme 写预设名（indigo）或色值（#2f4a8c）都行，来自 write.json
+    的 articles 段——某篇想用内容主题色（比如 rea-video 用紫），写一句就换。
+    """
+    spec = (item.get("theme") or "").strip() if isinstance(item, dict) else ""
+    lang = ((item.get("lang") or "").strip() if isinstance(item, dict) else "")
+    if spec and (spec.lower() in PRESETS or is_hex(spec)):
+        p = resolve(spec)
+        p["label"] = f"{p['label']}（手指定）"
+        return p
+    if lang in LANG_COLORS:
+        p = resolve(tune(LANG_COLORS[lang]))
+        p["label"] = f"{lang}系"
+        p["note"] = f"按主语言 {lang} 推导：{LANG_COLORS[lang]} → {p['accent']}"
+        return p
+    return resolve(fallback)
+
+
 # ---------------------------------------------------------------- 解析
 
 def resolve(spec=None):

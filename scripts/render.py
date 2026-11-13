@@ -34,9 +34,9 @@ C_HAIRLINE = "#d9d2c4"
 
 
 def apply_theme(spec=None):
-    """按预设名 / #hex 换整套主色。返回解析后的色板，方便调用方打印。"""
+    """按预设名 / #hex / 已解析的色板换整套主色。返回解析后的色板。"""
     global C_ACCENT, C_SOFT, C_QUOTE_BG, C_HAIRLINE
-    p = theme.resolve(spec)
+    p = spec if isinstance(spec, dict) and "accent" in spec else theme.resolve(spec)
     C_ACCENT = p["accent"]
     C_SOFT = p["soft"]
     C_QUOTE_BG = p["quote_bg"]
@@ -713,6 +713,11 @@ def write_files(issue, out_dir):
 
     made = []
 
+    # 导读：账号主色。单篇各自按主题配色（手动 theme > 主语言推导），
+    # 所以这里先把全局刷回账号主色，再在单篇循环里逐篇切换。
+    prof_spec = theme.current_spec(issue.get("profile") or {})
+    apply_theme(prof_spec)
+
     # 导读
     p_html = os.path.join(out_dir, f"issue_{date}.html")
     with open(p_html, "w", encoding="utf-8") as f:
@@ -723,18 +728,25 @@ def write_files(issue, out_dir):
         f.write(markdown(issue))
     made.append(("导读", issue.get("title") or "索引", p_html, p_md))
 
-    # 单篇
+    # 单篇：每篇开渲前换上自己的主题色。颜色是渲染时读的模块变量，
+    # 所以顺序必须是「先 apply_theme 再调 article_body/page」，反过来就是上一篇的色。
     for idx, it in deep:
+        p_theme = theme.for_article(it, prof_spec)
+        apply_theme(p_theme)
         slug = it.get("slug") or (it["full_name"].split("/")[-1].replace(".", "-"))
         name = it.get("zh_name") or it["full_name"]
         a_html = os.path.join(out_dir, f"a{idx}_{slug}.html")
         with open(a_html, "w", encoding="utf-8") as f:
             f.write(page(f"{name}：{it.get('kicker','')}", article_body(issue, it, idx, total),
-                         " · ".join(base_meta + [f"单篇 {idx}/{total}"]), TIPS_ARTICLE))
+                         " · ".join(base_meta + [f"单篇 {idx}/{total} · {p_theme['label']}"]),
+                         TIPS_ARTICLE))
         a_md = os.path.join(out_dir, f"a{idx}_{slug}.md")
         with open(a_md, "w", encoding="utf-8") as f:
             f.write(article_markdown(issue, it, idx, total))
         made.append((f"单篇{idx}", f"{name}：{it.get('kicker','')}", a_html, a_md))
+
+    # 收尾把全局刷回账号主色，别让最后渲染的单篇颜色泄漏到之后的调用方
+    apply_theme(prof_spec)
 
     # 配图清单
     p_fig = os.path.join(out_dir, f"issue_{date}_配图清单.txt")

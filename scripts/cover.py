@@ -34,7 +34,7 @@ C_ACCENT = "#6FCF97"    # 深底上的强调色
 def apply_theme(spec=None):
     """把封面深底和强调色对齐到主题色。深底是主色压暗到底，强调色是提亮版。"""
     global C_BG_1, C_BG_2, C_DIM, C_ACCENT
-    p = theme.resolve(spec)
+    p = spec if isinstance(spec, dict) and "accent" in spec else theme.resolve(spec)
     C_BG_1 = p["cover_bg1"]
     C_BG_2 = p["cover_bg2"]
     C_DIM = p["cover_dim"]
@@ -401,6 +401,7 @@ def build(issue, out_dir, want=("big", "square"), browser=None):
 
     os.makedirs(out_dir, exist_ok=True)
     prof = issue.get("profile") or {}
+    prof_spec = theme.current_spec(prof)
     made = []
     items = [issue["main"]] + (issue.get("shorts") or [])
 
@@ -416,6 +417,9 @@ def build(issue, out_dir, want=("big", "square"), browser=None):
             p = os.path.join(out_dir, f"a{idx}_{slug}_封面_{'2.35x1' if kind == 'big' else '1x1'}.png")
             html_str = _custom_html(slug, kind)
             if html_str is None:
+                # 通用模板封面跟着这篇的主题色走（和正文同源）；
+                # covers_src/ 里的专属手绘封面有自己的配色，不切主题
+                apply_theme(theme.for_article(it, prof_spec))
                 html_str = cover_html(it, prof, size)
             ok, err = make(html_str, p, size, browser)
             if ok:
@@ -440,6 +444,7 @@ def build(issue, out_dir, want=("big", "square"), browser=None):
         p = os.path.join(out_dir, f"issue_封面_{'2.35x1' if kind == 'big' else '1x1'}.png")
         html_str = _custom_html("issue", kind)
         if html_str is None:
+            apply_theme(prof_spec)  # 导读封面回账号主色
             html_str = cover_html(index_item, prof, size)
         ok, err = make(html_str, p, size, browser)
         if ok:
