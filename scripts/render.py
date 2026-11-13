@@ -11,6 +11,7 @@
     所以这里只输出「链接位」占位框，粘贴后人工替换
 """
 import html
+import json
 import os
 
 import theme
@@ -78,11 +79,7 @@ def _emojify(title):
 
 
 def meme_slot(tip="放一张和这里内容对得上的表情包，微信里搜现成的就行"):
-    """表情包/配图占位框。小白读者看纯文字容易划走，大节之间垫一张图换口气。
-
-    微信正文图必须手动插，所以这里给占位框 + 具体建议（放什么、去哪找），
-    发布时插好图删掉框。
-    """
+    """表情包/配图占位框（没有走配图系统时的兜底）。"""
     return (f'<section style="margin:20px 0;padding:12px 14px;'
             f'border:1px dashed {C_HAIRLINE};border-radius:6px;'
             f'background:#ffffff;text-align:center;">'
@@ -90,6 +87,70 @@ def meme_slot(tip="放一张和这里内容对得上的表情包，微信里搜�
             f'line-height:1.75;letter-spacing:0.5px;">😄［这里放一张表情包］</p>'
             f'<p style="margin:0;font-size:12px;color:{C_SUB};line-height:1.7;">'
             f'建议：{esc(tip)}</p></section>')
+
+
+# ---------------------------------------------------------------- 配图槽
+# 高密度图文混排（2026-11 定稿）：每篇 8~12 个槽位，槽位计划/候选/选定
+# 都在 data/images.json（scripts/images.py 管理），这里只负责「按锚点渲染」。
+
+def pic_html(slot):
+    """渲染一个配图槽位。
+
+    预览页里直接嵌真图（本地相对路径）；「复制正文」时页面脚本会把带
+    data-wxpic 的整块换成「上传指引框」，微信粘贴流程和以前一样可靠。
+    """
+    cands = slot.get("candidates") or []
+    chosen = slot.get("chosen") or ""
+    cand = next((x for x in cands if x.get("key") == chosen), None)
+    mood = f"（{slot['mood']}）" if slot.get("mood") else ""
+    if cand is None:
+        kws = " / ".join((slot.get("keywords") or [])[:2])
+        return (f'<section style="margin:22px 0;padding:12px 14px;'
+                f'border:1px dashed {C_HAIRLINE};border-radius:6px;'
+                f'background:#ffffff;text-align:center;">'
+                f'<p style="margin:0 0 4px 0;font-size:14px;color:{C_ACCENT};'
+                f'line-height:1.75;letter-spacing:0.5px;">'
+                f'🖼［配图待选：{esc(slot.get("label",""))} · '
+                f'{esc(slot.get("type",""))}{esc(mood)}］</p>'
+                f'<p style="margin:0;font-size:12px;color:{C_SUB};line-height:1.7;">'
+                f'{"已备候选，去审核页挑一张" if cands else f"搜词参考：{esc(kws)}"}'
+                f'</p></section>')
+    cap = slot.get("caption") or ""
+    cap_html = (f'<p style="margin:6px 0 0 0;font-size:13px;color:{C_SUB};'
+                f'line-height:1.6;letter-spacing:0.5px;">{esc(cap)}</p>' if cap else "")
+    return (f'<section data-wxpic="1" data-file="data/{esc(cand["path"])}" '
+            f'data-cap="{esc(cap)}" data-type="{esc(slot.get("type","配图"))}" '
+            f'style="margin:24px 0;text-align:center;">'
+            f'<img src="../{esc(cand["path"])}" alt="{esc(cap or slot.get("label","配图"))}" '
+            f'style="max-width:100%;border-radius:8px;'
+            f'box-shadow:0 2px 8px rgba(0,0,0,0.08);">'
+            f'{cap_html}</section>')
+
+
+def md_pic(slot):
+    """markdown 版的插图位说明行。"""
+    if not slot:
+        return ""
+    chosen = slot.get("chosen") or ""
+    cand = next((x for x in slot.get("candidates") or [] if x.get("key") == chosen), None)
+    mood = f"（{slot['mood']}）" if slot.get("mood") else ""
+    if cand:
+        return (f"\n> 🖼 **插图｜{slot.get('type','配图')}**："
+                f"`data/{cand['path']}`（发布时在编辑器上传这张图替换本行）\n")
+    return (f"\n> 🖼 **配图位｜{slot.get('label','')} · "
+            f"{slot.get('type','')}{mood}**：待选（审核页里挑，或搜词 "
+            f"「{' / '.join((slot.get('keywords') or [])[:2])}」）\n")
+
+
+def make_pic_fn(slots):
+    """给 article_body / article_markdown 用的取槽函数：按锚点拿槽位，
+    没有就返回空。"""
+    def pic(anchor):
+        return (slots or {}).get(anchor)
+    return pic
+
+
+# ---------------------------------------------------------------- 小块
 
 
 # ---------------------------------------------------------------- 小块
@@ -506,8 +567,13 @@ def article_header(issue, item, idx, total):
             '</p></section>')
 
 
-def article_body(issue, item, idx, total):
-    """一篇单项目深挖。字段缺了就跳过，方便先出骨架再补文案。"""
+def article_body(issue, item, idx, total, slots=None):
+    """一篇单项目深挖。字段缺了就跳过，方便先出骨架再补文案。
+
+    slots 是配图槽位表 {anchor: slot}（来自 data/images.json），有槽就按
+    锚点插配图；没传就走老的兜底占位框。
+    """
+    pic = make_pic_fn(slots)
     out = [article_header(issue, item, idx, total)]
 
     # 标题 + 定位句 + 导语
@@ -520,6 +586,9 @@ def article_body(issue, item, idx, total):
     if item.get("lead"):
         out.append(quote(item["lead"]))
     out.append(figure(item["full_name"], item.get("figure_caption", "")))
+    _s = pic("lead_after")
+    if _s:
+        out.append(pic_html(_s))
 
     # 小节自动编号（跳过缺的字段，编号顺延）
     sec = [0]
@@ -528,19 +597,29 @@ def article_body(issue, item, idx, total):
         sec[0] += 1
         return sub_title(label, sec[0])
 
-    for seg in (item.get("what") or []):
+    whats = item.get("what") or []
+    for j, seg in enumerate(whats):
         out.append(para(esc(seg)))
-
-    # 大节之间垫一张表情包/配图，纯文字连排会让人划走（建议文案随内容走）
-    if (item.get("what") or []) and (item.get("pain") or item.get("check")):
-        out.append(meme_slot(
-            "放这个项目的运行截图最直观（去仓库 README 里截一张），"
-            "或者一张「有点东西」的表情包"))
+        if j == 0 and len(whats) >= 2:
+            _s = pic("what_mid")
+            if _s:
+                out.append(pic_html(_s))
+    _s = pic("what_end")
+    if _s:
+        out.append(pic_html(_s))
+    elif not slots:  # 没接配图系统时保留老的兜底框
+        if whats and (item.get("pain") or item.get("check")):
+            out.append(meme_slot(
+                "放这个项目的运行截图最直观（去仓库 README 里截一张），"
+                "或者一张「有点东西」的表情包"))
 
     if item.get("pain"):
         out.append(st("它替你省掉哪件烦事"))
         for seg in item["pain"]:
             out.append(para(esc(seg)))
+        _s = pic("pain_end")
+        if _s:
+            out.append(pic_html(_s))
 
     if item.get("check"):
         out.append(st("装之前，先确认三件事"))
@@ -555,6 +634,9 @@ def article_body(issue, item, idx, total):
         if item.get("ai_prompt"):
             out.append(code_block(item["ai_prompt"],
                                   item.get("ai_prompt_label") or "复制下面这段，发给能操作你电脑的 AI"))
+            _s = pic("ai_mid")
+            if _s:
+                out.append(pic_html(_s))
         if item.get("ai_follow"):
             for seg in item["ai_follow"]:
                 out.append(para(esc(seg)))
@@ -570,22 +652,35 @@ def article_body(issue, item, idx, total):
     if item.get("first"):
         out.append(st("第一次打开，先做这三件事"))
         out.append(bullet_list(item["first"], marker="›"))
+        _s = pic("first_end")
+        if _s:
+            out.append(pic_html(_s))
 
     if item.get("pits"):
         out.append(st("会踩到的坑"))
         out.append(pit_list(item["pits"]))
-        out.append(meme_slot(
-            "放一张踩坑/头大主题的表情包换口气，微信里搜「程序员 踩坑 表情包」"
-            "一堆现成的"))
+        _s = pic("pits_end")
+        if _s:
+            out.append(pic_html(_s))
+        elif not slots:
+            out.append(meme_slot(
+                "放一张踩坑/头大主题的表情包换口气，微信里搜「程序员 踩坑 表情包」"
+                "一堆现成的"))
 
     if item.get("fit") or item.get("unfit"):
         if item.get("fit"):
             out.append(hint_block("适合", item["fit"], tone="green"))
         if item.get("unfit"):
             out.append(hint_block("不适合", item["unfit"], tone="warm"))
+        _s = pic("fit_end")
+        if _s:
+            out.append(pic_html(_s))
 
     if item.get("verdict"):
         out.append(verdict_block(item["verdict"]))
+        _s = pic("verdict_after")
+        if _s:
+            out.append(pic_html(_s))
 
     out.append(repo_block(item))
 
@@ -605,9 +700,10 @@ def article_body(issue, item, idx, total):
 
 TIPS_ISSUE = ("粘贴提示：正文图片微信不认外链，占位框里的 og 图请先另存再插入；"
               "GitHub 地址正文里点不动，需要留一个可点的就往「阅读原文」里放。")
-TIPS_ARTICLE = ("粘贴提示：单篇里有一个「链接位」（回导读，等导读发布后用编辑器「链接」按钮指向它）；"
-                "两个「表情包位」——插好图后把虚线框删掉；"
-                "结尾的项目地址块是给小白读者看的说明，链接本身点不动，属正常。")
+TIPS_ARTICLE = ("粘贴提示：点「复制正文」后，预览里嵌好的插图会自动变成「上传指引框」——"
+                "在编辑器里用「图片」按钮上传指引框里写的那个文件，再删框。"
+                "单篇还有一个「链接位」（回导读），发布导读后用编辑器「链接」按钮替换。"
+                "插图版权状态见 data/reports/images_review.html 每张候选下方的标注。")
 
 
 def page(title, body_html, meta_html="", tips=TIPS_ISSUE, btn="复制正文（富文本）"):
@@ -643,10 +739,33 @@ def page(title, body_html, meta_html="", tips=TIPS_ISSUE, btn="复制正文（�
 <script>
 function copyBody(){{
   var el=document.getElementById('wxbody');
-  var r=document.createRange(); r.selectNodeContents(el);
+  var clone=el.cloneNode(true);
+  // 嵌好的插图换成「上传指引框」：微信编辑器不认外链/本地路径，
+  // 发布流程 = 按框里的文件路径上传图片，再删框。
+  var holder=document.createElement('div');
+  holder.style.position='fixed';holder.style.left='-9999px';holder.style.top='0';
+  holder.appendChild(clone);document.body.appendChild(holder);
+  var n=1;
+  clone.querySelectorAll('[data-wxpic]').forEach(function(sec){{
+    var file=sec.getAttribute('data-file')||'';
+    var cap=sec.getAttribute('data-cap')||'';
+    var typ=sec.getAttribute('data-type')||'配图';
+    var box=document.createElement('section');
+    box.setAttribute('style','margin:22px 0;padding:12px 14px;border:1px dashed #cfcfcf;'
+      +'border-radius:8px;background:#fbfbfa;text-align:center;');
+    box.innerHTML='<p style="margin:0 0 4px 0;font-size:13px;color:#888888;'
+      +'line-height:1.75;letter-spacing:0.5px;">🖼［插图 '+n+' · '+typ+'］'
+      +(cap?'　'+cap:'')+'</p>'
+      +'<p style="margin:0;font-size:12px;color:#b5b5b5;line-height:1.6;">'
+      +'上传这张图：'+file+'　（编辑器「图片」按钮 → 选文件 → 删掉本框）</p>';
+    sec.parentNode.replaceChild(box,sec);
+    n++;
+  }});
+  var r=document.createRange(); r.selectNodeContents(clone);
   var s=window.getSelection(); s.removeAllRanges(); s.addRange(r);
   try {{ document.execCommand('copy'); }} catch(e) {{}}
   s.removeAllRanges();
+  document.body.removeChild(holder);
   var ok=document.getElementById('ok'); ok.style.opacity=1;
   setTimeout(function(){{ ok.style.opacity=0; }},1600);
 }}
@@ -734,7 +853,8 @@ def markdown(issue):
     return "".join(L)
 
 
-def article_markdown(issue, item, idx, total):
+def article_markdown(issue, item, idx, total, slots=None):
+    pic = make_pic_fn(slots)
     name = item.get("zh_name") or item["full_name"]
     prof = issue.get("profile") or {}
     marks = "①②③④⑤⑥⑦⑧"
@@ -744,16 +864,30 @@ def article_markdown(issue, item, idx, total):
     if item.get("lead"):
         L.append(f"> {item['lead']}\n")
     L.append(f"\n![{item['full_name']}](https://opengraph.githubassets.com/1/{item['full_name']})\n")
+    _s = pic("lead_after")
+    if _s:
+        L.append(md_pic(_s))
     if item.get("meta"):
         for k, v in item["meta"]:
             L.append(f"- **{k}**：{v}\n")
         L.append("\n")
-    for seg in (item.get("what") or []):
+    whats = item.get("what") or []
+    for j, seg in enumerate(whats):
         L.append(f"{seg}\n\n")
+        if j == 0 and len(whats) >= 2:
+            _s = pic("what_mid")
+            if _s:
+                L.append(md_pic(_s))
+    _s = pic("what_end")
+    if _s:
+        L.append(md_pic(_s))
     if item.get("pain"):
         L.append("## 它替你省掉哪件烦事\n\n")
         for seg in item["pain"]:
             L.append(f"{seg}\n\n")
+        _s = pic("pain_end")
+        if _s:
+            L.append(md_pic(_s))
     if item.get("check"):
         L.append("## 装之前，先确认三件事\n\n")
         for k, v in item["check"]:
@@ -765,6 +899,9 @@ def article_markdown(issue, item, idx, total):
             L.append(f"{seg}\n\n")
         if item.get("ai_prompt"):
             L.append("```text\n" + "\n".join(item["ai_prompt"]) + "\n```\n\n")
+            _s = pic("ai_mid")
+            if _s:
+                L.append(md_pic(_s))
         for seg in (item.get("ai_follow") or []):
             L.append(f"{seg}\n\n")
         if item.get("ai_warn"):
@@ -782,17 +919,29 @@ def article_markdown(issue, item, idx, total):
         for k, s in enumerate(item["first"], 1):
             L.append(f"{k}. {s}\n")
         L.append("\n")
+        _s = pic("first_end")
+        if _s:
+            L.append(md_pic(_s))
     if item.get("pits"):
         L.append("## 会踩到的坑\n\n")
         for p in item["pits"]:
             head, b = (p[0], p[1]) if isinstance(p, (list, tuple)) else ("", p)
             L.append(f"**{head}**：{b}\n\n" if head else f"{b}\n\n")
+        _s = pic("pits_end")
+        if _s:
+            L.append(md_pic(_s))
     if item.get("fit"):
         L.append("## 适合\n\n" + "".join(f"- {x}\n" for x in item["fit"]) + "\n")
     if item.get("unfit"):
         L.append("## 不适合\n\n" + "".join(f"- {x}\n" for x in item["unfit"]) + "\n")
+    _s = pic("fit_end")
+    if _s:
+        L.append(md_pic(_s))
     if item.get("verdict"):
         L.append(f"**说句实话**：{item['verdict']}\n\n")
+        _s = pic("verdict_after")
+        if _s:
+            L.append(md_pic(_s))
     L.append("**项目地址（全英文页面，复制发给 AI，说「帮我装这个」就能装）**\n\n")
     L.append(f"{item.get('url','')}\n\n")
     L.append(f"（⭐ {item.get('stars','')} 个开发者收藏过 · 形态：{item.get('form','')}）\n\n")
@@ -837,25 +986,35 @@ def write_files(issue, out_dir):
 
     # 单篇：每篇开渲前换上自己的主题色。颜色是渲染时读的模块变量，
     # 所以顺序必须是「先 apply_theme 再调 article_body/page」，反过来就是上一篇的色。
+    # 配图槽位按篇取（data/images.json，scripts/images.py 管理）。
+    plan = {}
+    p_img = os.path.join(os.path.dirname(out_dir.rstrip("\\/")), "images.json")
+    if os.path.exists(p_img):
+        with open(p_img, encoding="utf-8") as f:
+            plan = json.load(f)
+
     for idx, it in deep:
         p_theme = theme.for_article(it, prof_spec)
         apply_theme(p_theme)
         slug = it.get("slug") or (it["full_name"].split("/")[-1].replace(".", "-"))
         name = it.get("zh_name") or it["full_name"]
+        art = plan.get(f"a{idx}") or {}
+        slots = {s["anchor"]: s for s in art.get("slots") or []}
         a_html = os.path.join(out_dir, f"a{idx}_{slug}.html")
         with open(a_html, "w", encoding="utf-8") as f:
-            f.write(page(f"{name}：{it.get('kicker','')}", article_body(issue, it, idx, total),
+            f.write(page(f"{name}：{it.get('kicker','')}",
+                         article_body(issue, it, idx, total, slots),
                          " · ".join(base_meta + [f"单篇 {idx}/{total} · {p_theme['label']}"]),
                          TIPS_ARTICLE))
         a_md = os.path.join(out_dir, f"a{idx}_{slug}.md")
         with open(a_md, "w", encoding="utf-8") as f:
-            f.write(article_markdown(issue, it, idx, total))
+            f.write(article_markdown(issue, it, idx, total, slots))
         made.append((f"单篇{idx}", f"{name}：{it.get('kicker','')}", a_html, a_md))
 
     # 收尾把全局刷回账号主色，别让最后渲染的单篇颜色泄漏到之后的调用方
     apply_theme(prof_spec)
 
-    # 配图清单
+    # 配图清单：og 图 + 配图系统已选定的候选（按篇列出，发布时从这儿上传）
     p_fig = os.path.join(out_dir, f"issue_{date}_配图清单.txt")
     with open(p_fig, "w", encoding="utf-8") as f:
         f.write(f"本期配图（另存后插入正文对应位置）\n日期 {date}\n")
@@ -867,6 +1026,19 @@ def write_files(issue, out_dir):
         for idx, it in deep:
             f.write(f"\n== 单篇 {idx}：{it.get('zh_name') or it['full_name']} ==\n")
             f.write(f"    https://opengraph.githubassets.com/1/{it['full_name']}\n")
+            art = plan.get(f"a{idx}") or {}
+            n = 0
+            for s in art.get("slots") or []:
+                cand = next((x for x in s.get("candidates") or []
+                             if x.get("key") == s.get("chosen")), None)
+                if not cand:
+                    continue
+                n += 1
+                lic = cand.get("license", "")
+                f.write(f"  插图{n}（{s['label']} · {s['type']}）：data/{cand['path']}\n"
+                        f"    版权状态：{lic}\n")
+            if not n:
+                f.write("  （还没选定插图 —— 跑 scripts/images.py search/review）\n")
 
     # 待插链接清单 —— 这张最容易被忘
     p_link = os.path.join(out_dir, f"issue_{date}_待插链接.txt")

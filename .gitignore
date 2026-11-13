@@ -16,3 +16,5 @@ __pycache__/
 # 截图预览
 *.png
 !docs/**
+data/images.json
+data/images/

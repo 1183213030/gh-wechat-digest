@@ -73,6 +73,20 @@ python scripts/digest.py history        # 看发过几期、发过哪些项目
 
 **每篇单篇有自己的主题色**：导读固定用账号主色，单篇按「文章内容主题」配色——优先级是 write.json articles 里的 `"theme"` 字段（预设名或 #hex，手动指定）> 仓库主语言自动推导（GitHub linguist 色过 `theme.tune()` 压进正文可用亮度带，如 Python→蓝、Kotlin→紫、JavaScript→深金）> 账号主色。单篇的通用模板封面跟着同色出，一期四篇四种色，导读一个色统住全场。某篇想指定内容主题色，在 articles 里加一行 `"theme": "plum"` 即可。
 
+**配图系统（高密度图文混排，`scripts/images.py`）**：目标是一篇 1500 字 8~12 张图、每 1~3 段一次配图机会，类型混着来（表情包/梗图/事件截图/软件截图），软件截图必须来自真实仓库。流程：
+
+```bash
+python scripts/images.py plan                          # 按文章生成 9 个槽位（锚点+类型+情绪+理由+搜词）
+python scripts/images.py list                          # 看每槽状态
+python scripts/images.py search --slot a1_s4 --kw "血压上来了 表情包"   # 每槽单独搜，2~3 张候选
+python scripts/images.py search-repo --slot a1_s2      # 功能段槽位：抓仓库 README 原图当候选
+python scripts/images.py review                        # 出审核页 data/reports/images_review.html
+python scripts/images.py apply --picks '{"a1_s1":"B"}' # 应用人工挑选（--auto 则每槽预选第一张）
+python scripts/digest.py render                        # 重渲：预览页嵌真图，配图清单列出待上传文件
+```
+
+要点：搜图前先通读文章、按槽位语境定制关键词（别拿默认词偷懒，且一篇文章不要只用一种表情包）；必应图片抓取自带元数据（原图地址/来源页/版权状态），webp 和图库水印图要人工筛掉；审核页里人工挑完复制 JSON 贴回来应用。「复制正文」按钮会把预览里嵌好的插图自动换成「上传指引框」（写明待上传文件路径），微信粘贴流程不变。版权：网络表情包一律标「授权待人工确认」，不默认可商用。
+
 `run` 的旋钮：
 
 | 参数 | 默认 | 什么时候改 |
